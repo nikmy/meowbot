@@ -2,12 +2,11 @@ package calendar
 
 import (
 	"fmt"
+	"github.com/nikmy/meowbot/pkg/tools/uid"
 	"strconv"
 	"time"
 
 	tb "gopkg.in/telebot.v3"
-
-	"github.com/nikmy/meowbot/pkg/uid"
 )
 
 func WeekdaysLayout(w *Widget) error {

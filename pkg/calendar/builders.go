@@ -1,9 +1,8 @@
 package calendar
 
 import (
+	"github.com/nikmy/meowbot/pkg/tools/builder"
 	"time"
-
-	"github.com/nikmy/meowbot/pkg/builder"
 )
 
 func NewCalendarWidget(wid string, binder, ignoreBinder inlineBinder, lang string, currDate time.Time) (*Widget, error) {
