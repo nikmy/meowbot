@@ -9,5 +9,4 @@ type Config struct {
 type TelegramConfig struct {
 	Token        string        `json:"token,omitempty"`
 	PollInterval time.Duration `json:"poll_interval" json:"poll_interval,omitempty"`
-	Testing      bool          `json:"testing"`
 }

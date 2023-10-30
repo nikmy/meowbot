@@ -26,5 +26,6 @@ var (
 		time.December:  "Декабрь",
 	}
 
+	enWeekdays = [7]string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 	ruWeekdays = [7]string{"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
 )

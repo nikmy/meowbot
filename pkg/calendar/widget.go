@@ -52,7 +52,7 @@ func AsID(id string) setter {
 }
 
 func (w *Widget) addButton(btn tb.InlineButton) error {
-	err := w.BindInline(&btn, "") // TODO: uid
+	err := w.BindInline(&btn)
 	if err != nil {
 		return err
 	}
@@ -61,9 +61,15 @@ func (w *Widget) addButton(btn tb.InlineButton) error {
 }
 
 func (w *Widget) getWeekdaysDisplayNames() [7]string {
-	return ruWeekdays
+	if w.language == "ru" {
+		return ruWeekdays
+	}
+	return enWeekdays
 }
 
 func (w *Widget) getMonthDisplayName(m time.Month) string {
-	return ruMonths[m]
+	if w.language == "ru" {
+		return ruMonths[m]
+	}
+	return m.String()
 }

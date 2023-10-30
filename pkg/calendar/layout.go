@@ -2,7 +2,6 @@ package calendar
 
 import (
 	"fmt"
-	"github.com/nikmy/meowbot/pkg/tools/uid"
 	"strconv"
 	"time"
 
@@ -14,7 +13,7 @@ func WeekdaysLayout(w *Widget) error {
 
 	for _, wd := range w.getWeekdaysDisplayNames() {
 		btn := tb.InlineButton{Text: wd}
-		if err := w.ignore.BindInline(&btn, uid.Generate()); err != nil {
+		if err := w.ignore.BindInline(&btn); err != nil {
 			return err
 		}
 		row = append(row, btn)
@@ -66,14 +65,17 @@ func ChooseDayLayout(w *Widget) error {
 	bOfToday := beginningOfDay(ceilNow())
 	daysInMonth := bOfMonth.AddDate(0, 1, -1).Day()
 
-	weekdayNumber := int(bOfMonth.Weekday()+6) % 7
+	weekdayNumber := int(bOfMonth.Weekday())
+	if w.language == "ru" {
+		weekdayNumber = (weekdayNumber + 6) % 7
+	}
 
 	var row []tb.InlineButton
 	if weekdayNumber > 0 {
 		row = make([]tb.InlineButton, 0, 7)
 		for i := 0; i < weekdayNumber; i++ {
 			cell := tb.InlineButton{Text: " "}
-			if err := w.ignore.BindInline(&cell, uid.Generate()); err != nil {
+			if err := w.ignore.BindInline(&cell); err != nil {
 				return err
 			}
 			row = append(row, cell)
@@ -90,7 +92,7 @@ func ChooseDayLayout(w *Widget) error {
 
 		if day.Before(bOfToday) {
 			cell := tb.InlineButton{Text: " "}
-			if err := w.ignore.BindInline(&cell, uid.Generate()); err != nil {
+			if err := w.ignore.BindInline(&cell); err != nil {
 				return err
 			}
 			row = append(row, cell)
@@ -104,7 +106,7 @@ func ChooseDayLayout(w *Widget) error {
 			Data: fmt.Sprintf("%s/sI/%s", w.widgetID, dayText),
 		}
 
-		err := w.BindInline(&cell, uid.Generate())
+		err := w.BindInline(&cell)
 		if err != nil {
 			return err
 		}
@@ -115,7 +117,7 @@ func ChooseDayLayout(w *Widget) error {
 	if len(row) > 0 {
 		for i := len(row); i < 7; i++ {
 			cell := tb.InlineButton{Text: " "}
-			if err := w.ignore.BindInline(&cell, uid.Generate()); err != nil {
+			if err := w.ignore.BindInline(&cell); err != nil {
 				return err
 			}
 			row = append(row, cell)

@@ -27,21 +27,24 @@ func (a *allOfAwaiter) Await(ctx context.Context) bool {
 	})
 
 	a.cases[0], a.cases[a.rest] = a.cases[a.rest], a.cases[0]
+	defer func() {
+		a.cases[0], a.cases[a.rest] = a.cases[a.rest], a.cases[0]
+		a.cases = a.cases[:len(a.cases)]
+	}()
 
 	for a.rest > 0 {
 		if !a.waitNext() {
 			return false
 		}
-		a.rest--
 	}
 	return true
 }
 
 func (a *allOfAwaiter) waitNext() bool {
 	choice, val, _ := reflect.Select(a.cases)
-	a.cases[choice], a.cases[len(a.cases)-1] = a.cases[len(a.cases)-1], a.cases[choice]
-	a.cases = a.cases[:len(a.cases)-1]
 	a.all = append(a.all, val.Interface())
+	a.cases[choice], a.cases[a.rest] = a.cases[a.rest], a.cases[choice]
+	a.rest--
 	return choice != 0
 }
 

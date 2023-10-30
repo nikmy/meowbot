@@ -30,7 +30,7 @@ func (t *throttler) Run(ctx context.Context) error {
 				return
 			}
 			v, _ := a.Value()
-			v.(func())()
+			v.([]func())[0]()
 		}
 	}()
 	return nil
