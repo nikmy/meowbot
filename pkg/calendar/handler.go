@@ -2,6 +2,7 @@ package calendar
 
 import (
 	"fmt"
+	"github.com/nikmy/meowbot/internal/telegram/callbacks"
 	"github.com/nikmy/meowbot/pkg/tools/builder"
 	"github.com/pkg/errors"
 	"strings"
@@ -9,19 +10,17 @@ import (
 
 	tb "gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/logger"
-	"github.com/nikmy/meowbot/internal/telegram/callbacks"
-	"github.com/nikmy/meowbot/internal/telegram/state"
+	"github.com/nikmy/meowbot/pkg/logger"
 )
 
 func SetupHandler(
-	mapper *callbacks.EventMapper[state.State],
+	log logger.Logger,
 	ignoreChan string,
-	returner func(*state.State, string, time.Time),
+	returner func(tb.Context, string, time.Time),
 ) {
 	h := &handler{
-		callbacks:  mapper,
-		logger:     logger.New("calendar"),
+		callbacks:  callbacks.NewEventMapper(),
+		logger:     log.With("calendar"),
 		ignoreChan: ignoreChan,
 		returner:   returner,
 	}
@@ -30,22 +29,22 @@ func SetupHandler(
 }
 
 type handler struct {
-	callbacks  *callbacks.EventMapper[state.State]
+	callbacks  *callbacks.EventMapper
 	logger     logger.Logger
 	ignoreChan string
-	returner   func(*state.State, string, time.Time)
+	returner   func(tb.Context, string, time.Time)
 }
 
-func (h *handler) newWidgetBuilder(wid string, state *state.State, currDate time.Time) *builder.Builder[Widget] {
+func (h *handler) newWidgetBuilder(wid string, state tb.Context, currDate time.Time) *builder.Builder[Widget] {
 	return builder.New[Widget]().
 		Use(AsCurrentDate(currDate)).
-		Use(AsLanguage(state.Context.Sender().LanguageCode)).
-		Use(AsBinder(h.callbacks.On("choose_datetime"))).
-		Use(AsIgnore(h.callbacks.On(h.ignoreChan))).
+		Use(AsLanguage(state.Sender().LanguageCode)).
+		//Use(AsBinder(h.callbacks.On("choose_datetime"))).
+		//Use(AsIgnore(h.callbacks.On(h.ignoreChan))).
 		Use(AsID(wid))
 }
 
-func (h *handler) chooseDatetime(_ string, state *state.State) error {
+func (h *handler) chooseDatetime(state tb.Context) error {
 	args := strings.Split(state.Callback().Data, "|")
 	if len(args) != 2 {
 		return errors.New("calendar: wrong callback data")
@@ -95,7 +94,7 @@ func (h *handler) chooseDatetime(_ string, state *state.State) error {
 	return nil
 }
 
-func (h *handler) showYears(wid string, state *state.State) {
+func (h *handler) showYears(wid string, state tb.Context) {
 	widget, err := h.newWidgetBuilder(wid, state, time.Now()).
 		MaybeUse(ChooseYearLayout).
 		Get()
@@ -114,7 +113,7 @@ func (h *handler) showYears(wid string, state *state.State) {
 	state.Edit("Выберите год:", opts)
 }
 
-func (h *handler) showMonths(wid string, state *state.State, currDate time.Time) {
+func (h *handler) showMonths(wid string, state tb.Context, currDate time.Time) {
 	widget, err := h.newWidgetBuilder(wid, state, currDate).
 		MaybeUse(YearButton).
 		MaybeUse(ChooseMonthLayout).
@@ -134,12 +133,12 @@ func (h *handler) showMonths(wid string, state *state.State, currDate time.Time)
 	state.Edit("Выберите месяц:", opts)
 }
 
-func (h *handler) showDays(wid string, state *state.State, currDate time.Time) {
+func (h *handler) showDays(wid string, state tb.Context, currDate time.Time) {
 	widget, err := NewCalendarWidget(
 		wid,
 		h.callbacks.On("choose_datetime"),
 		h.callbacks.On(h.ignoreChan),
-		state.Context.Sender().LanguageCode,
+		state.Sender().LanguageCode,
 		currDate,
 	)
 
@@ -159,7 +158,7 @@ func (h *handler) showDays(wid string, state *state.State, currDate time.Time) {
 	state.Edit("Выберите дату:", opts)
 }
 
-func (h *handler) showIntervals(wid string, state *state.State, day time.Time) {
+func (h *handler) showIntervals(wid string, state tb.Context, day time.Time) {
 	widget, err := h.newWidgetBuilder(wid, state, day).
 		MaybeUse(DateButton).
 		MaybeUse(ChooseIntervalLayout).
@@ -179,7 +178,7 @@ func (h *handler) showIntervals(wid string, state *state.State, day time.Time) {
 	state.Edit("Выберите интервал (ч):", opts)
 }
 
-func (h *handler) showHours(wid string, state *state.State, interval time.Time) {
+func (h *handler) showHours(wid string, state tb.Context, interval time.Time) {
 	widget, err := h.newWidgetBuilder(wid, state, interval).
 		MaybeUse(IntervalButton).
 		MaybeUse(ChooseHourLayout).
@@ -199,7 +198,7 @@ func (h *handler) showHours(wid string, state *state.State, interval time.Time) 
 	state.Edit("Выберите час:", opts)
 }
 
-func (h *handler) showSlots(wid string, state *state.State, hour time.Time) {
+func (h *handler) showSlots(wid string, state tb.Context, hour time.Time) {
 	widget, err := h.newWidgetBuilder(wid, state, hour).
 		MaybeUse(HourButton).
 		MaybeUse(ChooseSlotLayout).
@@ -219,6 +218,6 @@ func (h *handler) showSlots(wid string, state *state.State, hour time.Time) {
 	state.Edit("Выберите слот:", opts)
 }
 
-func (h *handler) chooseSlot(wid string, state *state.State, slot time.Time) {
+func (h *handler) chooseSlot(wid string, state tb.Context, slot time.Time) {
 	h.returner(state, wid, slot)
 }
