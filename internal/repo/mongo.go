@@ -21,11 +21,11 @@ var (
 	}
 )
 
-func newMongo(
+func NewMongo(
 	ctx context.Context,
 	cfg MongoConfig,
 	log logger.Logger,
-) (*mongoRepo, error) {
+) (Repo, error) {
 	client, err := mongo.Connect(
 		ctx,
 		options.Client().
@@ -155,12 +155,17 @@ func (m *mongoRepo) Delete(ctx context.Context, id string) (bool, error) {
 	return result.DeletedCount == 1, nil
 }
 
-func (m *mongoRepo) Update(ctx context.Context, id string, newData any, newAt time.Time) (bool, error) {
+func (m *mongoRepo) Update(ctx context.Context, id string, newData any, newAt *time.Time) (bool, error) {
+	patch := bson.D{}
+	if newData != nil {
+		patch = append(patch, bson.E{Key: "data", Value: newData})
+	}
+	if newAt != nil {
+		patch = append(patch, bson.E{Key: "remind_at", Value: *newAt})
+	}
+
 	update := bson.D{
-		{"$set", bson.D{
-			{"data", newData},
-			{"remind_at", newAt},
-		}},
+		{"$set", patch},
 	}
 
 	result, err := m.coll.UpdateOne(ctx, m.oidFilter(id), update)

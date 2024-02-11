@@ -11,8 +11,9 @@ type Repo interface {
 
 	Create(ctx context.Context, data any, at time.Time, channels []string) (id string, err error)
 	Delete(ctx context.Context, id string) (deleted bool, err error)
-	Update(ctx context.Context, id string, newData any, newAt time.Time) (success bool, err error)
-	Cancel(ctx context.Context, id string)
+	Update(ctx context.Context, id string, newData any, newAt *time.Time) (success bool, err error)
+
+	Close(ctx context.Context) error
 }
 
 type Reminder struct {
