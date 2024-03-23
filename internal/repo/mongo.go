@@ -122,17 +122,17 @@ func (m *mongoRepo) GetReadyAt(ctx context.Context, at time.Time) ([]Reminder, e
 	}
 
 	if len(errs) != 0 {
-		err = errors.WrapFail(errors.Collapse(errs), "decode some reminders")
+		err = errors.WrapFail(errors.Join(errs), "decode some reminders")
 		m.log.Error(err)
 	}
 
 	return reminders, nil
 }
 
-func (m *mongoRepo) Create(ctx context.Context, data any, at time.Time, channels []string) (string, error) {
+func (m *mongoRepo) Create(ctx context.Context, data any, at time.Time, channel string) (string, error) {
 	reminder := Reminder{
 		RandomID: rand.Uint32(),
-		Channels: channels,
+		Channel:  channel,
 		RemindAt: at,
 		Data:     data,
 	}

@@ -6,6 +6,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	go.uber.org/zap v1.17.0
 	gopkg.in/telebot.v3 v3.1.3
+
+	github.com/segmentio/kafka-go v0.4.30
 )
 
 require (

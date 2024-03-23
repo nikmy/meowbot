@@ -75,7 +75,7 @@ func (s *server) Shutdown(ctx context.Context) error {
 		errs = append(errs, errors.WrapFail(err, "shutdown http server"))
 	}
 
-	return errors.Collapse(errs)
+	return errors.Join(errs)
 }
 
 func (s *server) setupRoutes() {

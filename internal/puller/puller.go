@@ -7,7 +7,7 @@ import (
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
-func NewPuller(ps pubSub, db db) Puller {
+func NewPuller(ps broadcaster, db db) Puller {
 	return &puller{
 		ps: ps,
 		db: db,
@@ -15,7 +15,7 @@ func NewPuller(ps pubSub, db db) Puller {
 }
 
 type puller struct {
-	ps pubSub
+	ps broadcaster
 	db db
 }
 
@@ -33,5 +33,5 @@ func (p *puller) DoWork(ctx context.Context) error {
 		}
 	}
 
-	return errors.Collapse(errs)
+	return errors.Join(errs)
 }

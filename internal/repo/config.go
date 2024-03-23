@@ -4,12 +4,8 @@ import (
 	"time"
 )
 
-type BaseConfig struct {
-	Interval time.Duration
-}
-
 type MongoConfig struct {
-	BaseConfig
+	Interval time.Duration
 
 	URL     string        `yaml:"url"`
 	Timeout time.Duration `yaml:"timeout"`
