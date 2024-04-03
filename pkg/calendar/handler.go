@@ -2,15 +2,15 @@ package calendar
 
 import (
 	"fmt"
-	"github.com/nikmy/meowbot/internal/telegram/callbacks"
-	"github.com/nikmy/meowbot/pkg/tools/builder"
-	"github.com/pkg/errors"
 	"strings"
 	"time"
 
 	tb "gopkg.in/telebot.v3"
 
+	"github.com/nikmy/meowbot/internal/telegram/callbacks"
+	"github.com/nikmy/meowbot/pkg/builder"
 	"github.com/nikmy/meowbot/pkg/logger"
+	"github.com/pkg/errors"
 )
 
 func SetupHandler(

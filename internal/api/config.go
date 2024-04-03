@@ -9,8 +9,8 @@ type Config struct {
 	} `yaml:"proxy"`
 
 	HTTP struct {
-		Addr        string        `yaml:"addr"`
-		ReadTimeout time.Duration `yaml:"read_timeout"`
+		Addr         string        `yaml:"addr"`
+		ReadTimeout  time.Duration `yaml:"read_timeout"`
 		WriteTimeout time.Duration `yaml:"write_timeout"`
 		IdleTimeout  time.Duration `yaml:"idle_timeout"`
 	} `yaml:"http"`

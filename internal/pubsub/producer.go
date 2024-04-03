@@ -3,11 +3,13 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
+	"time"
+
+	"github.com/segmentio/kafka-go"
+
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
-	"github.com/segmentio/kafka-go"
-	"time"
 )
 
 func NewKafkaProducer(ctx context.Context, cfg Config, log logger.Logger) *kafkaProducer {

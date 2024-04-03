@@ -2,8 +2,9 @@ package puller
 
 import (
 	"context"
-	"github.com/nikmy/meowbot/internal/repo"
 	"time"
+
+	"github.com/nikmy/meowbot/internal/repo"
 )
 
 type Puller interface {

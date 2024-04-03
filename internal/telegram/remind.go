@@ -2,11 +2,11 @@ package telegram
 
 import (
 	"context"
+	"time"
+
 	"github.com/nikmy/meowbot/internal/repo"
-	"github.com/nikmy/meowbot/internal/telegram/model"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"gopkg.in/telebot.v3"
-	"time"
 )
 
 const (
@@ -14,12 +14,12 @@ const (
 )
 
 func (b *Bot) remind(ctx context.Context, msg *telebot.Message, remindAt time.Time) (string, error) {
-	rData := model.Data{
+	rData := Data{
 		MessageID:  msg.ID,
 		RemindTime: remindAt,
 	}
 
-	id, err := b.repo.Create(ctx, rData, remindAt, []string{pubSubChannel})
+	id, err := b.repo.Create(ctx, rData, remindAt, pubSubChannel)
 	return id, errors.WrapFail(err, "create message reminder")
 }
 
@@ -29,10 +29,10 @@ func (b *Bot) bindStatusMsg(ctx context.Context, id string, statusMsg *telebot.M
 		return err
 	}
 
-	data := r.Data.(model.Data)
+	data := r.Data.(Data)
 	data.StatusMsg = statusMsg
 
-	upd, err := b.repo.Update(ctx, id, data, r.RemindAt)
+	upd, err := b.repo.Update(ctx, id, data, &r.RemindAt)
 	if err != nil {
 		return errors.WrapFail(err, "bind status message")
 	}
@@ -50,7 +50,7 @@ func (b *Bot) updateReminderTime(ctx context.Context, id string, newRemindTime t
 		return err
 	}
 
-	upd, err := b.repo.Update(ctx, id, r.Data, newRemindTime)
+	upd, err := b.repo.Update(ctx, id, r.Data, &newRemindTime)
 	if err != nil {
 		return errors.WrapFail(err, "change remind time")
 	}
@@ -82,11 +82,10 @@ func (b *Bot) sendReminder(r repo.Reminder) error {
 
 	for i := range keyboard.InlineKeyboard[0] {
 		keyboard.InlineKeyboard[0][i].Unique = r.Unique // will be "\f<callback_name>|<data>"
-		b.Handle("unique")
+		b.Handle("unique", nil)
 	}
 
 	msg := map[string]any{
-		"random_id":       r.RandomID,
 		"message":         &telebot.Message{Text: "meow!"},
 		"reply_to_msg_id": data.MessageID,
 		"reply_markup":    keyboard,

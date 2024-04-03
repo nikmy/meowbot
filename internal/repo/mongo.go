@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"math/rand"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -129,10 +128,9 @@ func (m *mongoRepo) GetReadyAt(ctx context.Context, at time.Time) ([]Reminder, e
 	return reminders, nil
 }
 
-func (m *mongoRepo) Create(ctx context.Context, data any, at time.Time, channel string) (string, error) {
+func (m *mongoRepo) Create(ctx context.Context, data any, at time.Time, channels []string) (string, error) {
 	reminder := Reminder{
-		RandomID: rand.Uint32(),
-		Channel:  channel,
+		Channels: channels,
 		RemindAt: at,
 		Data:     data,
 	}

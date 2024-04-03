@@ -2,14 +2,16 @@ package api
 
 import (
 	"context"
-	"github.com/gofiber/fiber/v2"
-	"github.com/nikmy/meowbot/internal/repo"
-	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/logger"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/nikmy/meowbot/internal/repo"
+	"github.com/nikmy/meowbot/pkg/errors"
+	"github.com/nikmy/meowbot/pkg/logger"
 )
 
 func NewServer(cfg Config, log logger.Logger, repo repo.Repo) Server {
@@ -213,7 +215,7 @@ func (s *server) getAtOrErr(c *fiber.Ctx) (time.Time, error) {
 
 	atUnix, err := strconv.ParseInt(atStr, 10, 64)
 	if err != nil {
-		return time.Time{}, errors.Errorf("got malformed \"at\" %s", atStr)
+		return time.Time{}, errors.Error("got malformed \"at\" %s", atStr)
 	}
 
 	return time.UnixMilli(atUnix), nil

@@ -1,9 +1,5 @@
 package builder
 
-type Obj struct {
-	A1, A2 int
-}
-
 func New[T any]() *Builder[T] {
 	return &Builder[T]{
 		Obj: new(T),

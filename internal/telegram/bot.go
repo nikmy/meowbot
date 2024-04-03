@@ -42,5 +42,6 @@ func (b *Bot) BindInline(button *telebot.InlineButton) error {
 }
 
 func (b *Bot) handleClick(c telebot.Context) error {
+	// TODO: routing
 	return nil
 }
