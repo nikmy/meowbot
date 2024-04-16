@@ -2,29 +2,13 @@ package repo
 
 import (
 	"context"
-	"time"
 )
 
-type Repo interface {
-	Get(ctx context.Context, id string) (data Reminder, err error)
-	GetReadyAt(ctx context.Context, at time.Time) (data []Reminder, err error)
-
-	Create(ctx context.Context, data any, at time.Time, channels []string) (id string, err error)
-	Delete(ctx context.Context, id string) (deleted bool, err error)
-	Update(ctx context.Context, id string, newData any, newAt *time.Time) (success bool, err error)
+type Repo[T any] interface {
+	Create(ctx context.Context, data T) (id string, err error)
+	Select(ctx context.Context, filters... Filter) (selected []T, err error)
+	Update(ctx context.Context, id string, update func(T) T) (err error)
+	Delete(ctx context.Context, id string) (err error)
 
 	Close(ctx context.Context) error
-}
-
-type Reminder struct {
-	Unique    string   `json:"unique"         bson:"-"`
-	Cancelled bool     `json:"cancelled"  bson:"cancelled"`
-	Channels  []string `json:"channels"   bson:"channels"`
-
-	RemindAt time.Time `json:"remind_at"  bson:"remind_at"`
-	Data     any       `json:"data"       bson:"data"`
-}
-
-func (r Reminder) GetID() string {
-	return r.Unique
 }

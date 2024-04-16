@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo"
@@ -27,8 +26,9 @@ func New(logger logger.Logger, conf *Config) (*Bot, error) {
 type Bot struct {
 	*telebot.Bot
 
-	repo   repo.Repo
+	usersRepo   repo.Repo
 	logger logger.Logger
+	states map[string]State
 }
 
 func (b *Bot) Run(ctx context.Context) error {

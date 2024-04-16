@@ -2,8 +2,6 @@ package repo
 
 import (
 	"context"
-	"time"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -13,18 +11,12 @@ import (
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-var (
-	collectionIndex = mongo.IndexModel{
-		Keys:    bson.D{{"remind_at", 1}},
-		Options: options.Index().SetName("remind_time"),
-	}
-)
-
-func NewMongo(
+func NewMongo[T any](
 	ctx context.Context,
 	cfg MongoConfig,
 	log logger.Logger,
-) (Repo, error) {
+	collectionIndex mongo.IndexModel,
+) (Repo[T], error) {
 	client, err := mongo.Connect(
 		ctx,
 		options.Client().
@@ -47,139 +39,100 @@ func NewMongo(
 		return nil, errors.WrapFail(err, "create index")
 	}
 
-	return &mongoRepo{
+	return &mongoRepo[T]{
 		coll: collection,
 		log:  log.With("mongo_repo"),
 	}, nil
 }
 
-type mongoRepo struct {
+type mongoRepo[T any] struct {
 	coll *mongo.Collection
 	log  logger.Logger
 }
 
-func (m *mongoRepo) Get(ctx context.Context, id string) (Reminder, error) {
-	result := m.coll.FindOne(ctx, bson.M{"id": id})
-	if result.Err() != nil {
-		return Reminder{}, errors.WrapFail(result.Err(), "find reminder")
-	}
-
-	var reminder Reminder
-
-	err := result.Decode(&reminder)
-	if err != nil {
-		return Reminder{}, errors.WrapFail(err, "decode reminder")
-	}
-
-	raw, err := result.Raw()
-	if err != nil {
-		return Reminder{}, errors.WrapFail(err, "get raw bson")
-	}
-
-	reminder.Unique, _ = m.makeID(raw.Lookup().ObjectID())
-
-	return reminder, nil
-}
-
-func (m *mongoRepo) GetReadyAt(ctx context.Context, at time.Time) ([]Reminder, error) {
-	timeFilter := bson.D{
-		{"remind_at", bson.D{
-			{"$lte", at},
-		}},
-	}
-
-	cur, err := m.coll.Find(ctx, timeFilter)
-	if err != nil {
-		return nil, errors.WrapFail(cur.Err(), "get ready reminders")
-	}
-
-	defer func() {
-		err := cur.Close(ctx)
-		if err != nil {
-			m.log.Warn(errors.WrapFail(err, "close cursor"))
-		}
-	}()
-
-	var (
-		reminders []Reminder
-		errs      []error
-	)
-
-	for cur.Next(ctx) {
-		var r Reminder
-
-		err := cur.Decode(&r)
-		if err != nil {
-			errs = append(errs, err)
-		}
-		r.Unique, _ = m.makeID(cur.Current.Lookup().ObjectID())
-		reminders = append(reminders, r)
-	}
-
-	if cur.Err() != nil {
-		return nil, errors.WrapFail(cur.Err(), "get ready reminders")
-	}
-
-	if len(errs) != 0 {
-		err = errors.WrapFail(errors.Join(errs), "decode some reminders")
-		m.log.Error(err)
-	}
-
-	return reminders, nil
-}
-
-func (m *mongoRepo) Create(ctx context.Context, data any, at time.Time, channels []string) (string, error) {
-	reminder := Reminder{
-		Channels: channels,
-		RemindAt: at,
-		Data:     data,
-	}
-
-	result, err := m.coll.InsertOne(ctx, reminder)
+func (r *mongoRepo[T]) Create(ctx context.Context, data T) (string, error) {
+	result, err := r.coll.InsertOne(ctx, data)
 	if err != nil {
 		return "", errors.WrapFail(err, "insert data")
 	}
 
-	id, err := m.makeID(result.InsertedID)
-	return id, errors.WrapFail(err, "get object id")
+	id, err := r.makeID(result.InsertedID)
+	return id, errors.WrapFail(err, "make object id")
 }
 
-func (m *mongoRepo) Delete(ctx context.Context, id string) (bool, error) {
-	result, err := m.coll.DeleteOne(ctx, m.oidFilter(id))
+func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, error) {
+	f := &filter{}
+	for _, fn := range filters {
+		fn(f)
+	}
+
+	var mongoFilter bson.D
+	if f.id != nil {
+		mongoFilter = r.oidFilter(*f.id)
+	}
+
+	c, err := r.coll.Find(ctx, mongoFilter)
 	if err != nil {
-		return false, errors.WrapFail(err, "delete reminder by oid")
+		return nil, errors.WrapFail(err, "find objects")
 	}
 
-	return result.DeletedCount == 1, nil
+	var (
+		selected []T
+		errs     []error
+	)
+
+	for c.Next(ctx) {
+		var data T
+		err = c.Decode(&data)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if f.fn == nil || (*f.fn)(data) {
+			selected = append(selected, data)
+		}
+	}
+
+	if c.Err() != nil {
+		errs = append(errs, errors.WrapFail(err, "move cursor"))
+	}
+
+	return selected, errors.Join(errs)
 }
 
-func (m *mongoRepo) Update(ctx context.Context, id string, newData any, newAt *time.Time) (bool, error) {
-	patch := bson.D{}
-	if newData != nil {
-		patch = append(patch, bson.E{Key: "data", Value: newData})
-	}
-	if newAt != nil {
-		patch = append(patch, bson.E{Key: "remind_at", Value: *newAt})
+func (r *mongoRepo[T]) Update(ctx context.Context, id string, update func(T) T) error {
+	idFilter := r.oidFilter(id)
+	result := r.coll.FindOne(ctx, idFilter)
+	if err := result.Err(); err != nil {
+		return errors.WrapFail(err, "find document to update")
 	}
 
-	update := bson.D{
-		{"$set", patch},
-	}
-
-	result, err := m.coll.UpdateOne(ctx, m.oidFilter(id), update)
+	var data T
+	err := result.Decode(&data)
 	if err != nil {
-		return false, errors.WrapFail(err, "update data by oid")
+		return errors.WrapFail(err, "decode data")
 	}
 
-	return result.ModifiedCount == 1, nil
+	data = update(data)
+	opts := &options.UpdateOptions{Upsert: new(bool)}
+	*opts.Upsert = true
+
+	_, err = r.coll.UpdateOne(ctx, idFilter, data, opts)
+	return errors.WrapFail(err, "do upsert")
 }
 
-func (m *mongoRepo) Close(ctx context.Context) error {
-	err := m.coll.Database().Client().Disconnect(ctx)
+func (r *mongoRepo[T]) Delete(ctx context.Context, id string) error {
+	_, err := r.coll.DeleteOne(ctx, r.oidFilter(id))
+	return errors.WrapFail(err, "delete data by oid")
+}
+
+func (r *mongoRepo[T]) Close(ctx context.Context) error {
+	err := r.coll.Database().Client().Disconnect(ctx)
 	return errors.WrapFail(err, "close mongo db connection")
 }
 
-func (m *mongoRepo) makeID(iid any) (string, error) {
+func (r *mongoRepo[T]) makeID(iid any) (string, error) {
 	objID, ok := iid.(primitive.ObjectID)
 	if !ok {
 		return "", errors.Error("bad id type")
@@ -189,7 +142,7 @@ func (m *mongoRepo) makeID(iid any) (string, error) {
 	return string(b[:]), nil
 }
 
-func (m *mongoRepo) oidFilter(oid string) bson.D {
+func (r *mongoRepo[T]) oidFilter(oid string) bson.D {
 	var objectID [12]byte
 	copy(objectID[:], oid)
 	return bson.D{{"_id", primitive.ObjectID(objectID)}}

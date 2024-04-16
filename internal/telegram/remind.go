@@ -19,7 +19,7 @@ func (b *Bot) remind(ctx context.Context, msg *telebot.Message, remindAt time.Ti
 		RemindTime: remindAt,
 	}
 
-	id, err := b.repo.Create(ctx, rData, remindAt, pubSubChannel)
+	id, err := b.repo.Create(ctx, rData, remindAt, []string{pubSubChannel})
 	return id, errors.WrapFail(err, "create message reminder")
 }
 
