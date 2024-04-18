@@ -66,9 +66,12 @@ func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, erro
 		fn(f)
 	}
 
-	var mongoFilter bson.D
+	var mongoFilter bson.M
 	if f.id != nil {
 		mongoFilter = r.oidFilter(*f.id)
+	}
+	for field, val := range f.fields {
+		mongoFilter[field] = val
 	}
 
 	c, err := r.coll.Find(ctx, mongoFilter)
@@ -142,8 +145,8 @@ func (r *mongoRepo[T]) makeID(iid any) (string, error) {
 	return string(b[:]), nil
 }
 
-func (r *mongoRepo[T]) oidFilter(oid string) bson.D {
+func (r *mongoRepo[T]) oidFilter(oid string) bson.M {
 	var objectID [12]byte
 	copy(objectID[:], oid)
-	return bson.D{{"_id", primitive.ObjectID(objectID)}}
+	return bson.M{"_id": primitive.ObjectID(objectID)}
 }

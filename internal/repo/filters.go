@@ -3,6 +3,8 @@ package repo
 
 
 type filter struct {
+	fields map[string]any
+
 	id *string
 	fn *func(any) bool
 }
@@ -12,6 +14,12 @@ type Filter func(*filter)
 func ByID(id string) Filter {
 	return func(f *filter) {
 		f.id = &id
+	}
+}
+
+func ByField(field string, value any) Filter {
+	return func(f *filter) {
+		f.fields[field] = value
 	}
 }
 
