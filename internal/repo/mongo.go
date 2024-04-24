@@ -61,18 +61,8 @@ func (r *mongoRepo[T]) Create(ctx context.Context, data T) (string, error) {
 }
 
 func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, error) {
-	f := &filter{}
-	for _, fn := range filters {
-		fn(f)
-	}
-
-	var mongoFilter bson.M
-	if f.id != nil {
-		mongoFilter = r.oidFilter(*f.id)
-	}
-	for field, val := range f.fields {
-		mongoFilter[field] = val
-	}
+	f := r.applyFilters(filters...)
+	mongoFilter := r.mongoFilter(f)
 
 	c, err := r.coll.Find(ctx, mongoFilter)
 	if err != nil {
@@ -104,9 +94,10 @@ func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, erro
 	return selected, errors.Join(errs)
 }
 
-func (r *mongoRepo[T]) Update(ctx context.Context, id string, update func(T) T) error {
-	idFilter := r.oidFilter(id)
-	result := r.coll.FindOne(ctx, idFilter)
+func (r *mongoRepo[T]) Update(ctx context.Context, selector Filter, update func(T) T) error {
+	mongoFilter := r.mongoFilter(r.applyFilters(selector))
+
+	result := r.coll.FindOne(ctx, mongoFilter)
 	if err := result.Err(); err != nil {
 		return errors.WrapFail(err, "find document to update")
 	}
@@ -121,7 +112,7 @@ func (r *mongoRepo[T]) Update(ctx context.Context, id string, update func(T) T) 
 	opts := &options.UpdateOptions{Upsert: new(bool)}
 	*opts.Upsert = true
 
-	_, err = r.coll.UpdateOne(ctx, idFilter, data, opts)
+	_, err = r.coll.UpdateOne(ctx, mongoFilter, data, opts)
 	return errors.WrapFail(err, "do upsert")
 }
 
@@ -143,6 +134,25 @@ func (r *mongoRepo[T]) makeID(iid any) (string, error) {
 
 	b := ([12]byte)(objID)
 	return string(b[:]), nil
+}
+
+func (r *mongoRepo[T]) applyFilters(filters ...Filter) *filter {
+	f := &filter{}
+	for _, fn := range filters {
+		fn(f)
+	}
+	return f
+}
+
+func (r *mongoRepo[T]) mongoFilter(f *filter) bson.M {
+	var mongoFilter bson.M
+	if f.id != nil {
+		mongoFilter = r.oidFilter(*f.id)
+	}
+	for field, val := range f.fields {
+		mongoFilter[field] = val
+	}
+	return mongoFilter
 }
 
 func (r *mongoRepo[T]) oidFilter(oid string) bson.M {

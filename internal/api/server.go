@@ -1,20 +1,21 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/nikmy/meowbot/internal/interviews"
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-func NewServer(cfg Config, log logger.Logger, repo repo.Repo) Server {
+func NewServer(cfg Config, log logger.Logger, repo repo.Repo[interviews.Interview]) Server {
 	serveLog := log.With("api_http_server")
 
 	fiberCfg := fiber.Config{
@@ -47,7 +48,7 @@ func NewServer(cfg Config, log logger.Logger, repo repo.Repo) Server {
 }
 
 type server struct {
-	repo repo.Repo
+	repo repo.Repo[interviews.Interview]
 	http *fiber.App
 	addr string
 	log  logger.Logger
@@ -81,62 +82,21 @@ func (s *server) Shutdown(ctx context.Context) error {
 }
 
 func (s *server) setupRoutes() {
-	s.http.Get("/getByID", s.handleGetByID)
-	s.http.Post("/getReady", s.handleGetReady)
 	s.http.Post("/new", s.handleNew)
 	s.http.Patch("/update", s.handleUpdate)
 	s.http.Delete("/delete", s.handleDelete)
 }
 
-func (s *server) handleGetByID(c *fiber.Ctx) error {
-	id, err := s.getIDOrErr(c)
-	if err != nil {
-		s.log.Warn(err)
-		return s.sendError(c, http.StatusBadRequest, "missing required parameter \"id\"")
-	}
-
-	reminder, err := s.repo.Get(c.Context(), id)
-	if err != nil {
-		return errors.WrapFail(err, "get reminder by id")
-	}
-
-	return c.Status(http.StatusOK).JSON(reminder)
-}
-
-func (s *server) handleGetReady(c *fiber.Ctx) error {
-	at, err := s.getAtOrErr(c)
-	if err != nil {
-		s.log.Warn(err)
-		c = c.Status(http.StatusBadRequest)
-		return s.sendError(c, http.StatusBadRequest, "bad or missed parameter \"at\"")
-	}
-
-	ready, err := s.repo.GetReadyAt(c.Context(), at)
-	if err != nil {
-		return errors.WrapFail(err, "get ready reminders from repo")
-	}
-
-	return c.Status(http.StatusOK).JSON(ready)
-}
-
 func (s *server) handleNew(c *fiber.Ctx) error {
-	at, err := s.getAtOrErr(c)
+	var data interviews.Interview
+	err := c.BodyParser(&data)
 	if err != nil {
-		s.log.Warn(err)
-		return s.sendError(c, http.StatusBadRequest, "bad or missed parameter \"at\"")
-	}
-
-	var data any
-	err = c.BodyParser(&data)
-	if err != nil {
-		err = errors.WrapFail(err, "unmarshal reminder payload")
+		err = errors.WrapFail(err, "unmarshal interview payload")
 		s.log.Warn(err)
 		return s.sendError(c, http.StatusBadRequest, "bad json")
 	}
 
-	channels := s.getChannels(c)
-
-	id, err := s.repo.Create(c.Context(), data, at, channels)
+	id, err := s.repo.Create(c.Context(), data)
 	if err != nil {
 		return errors.WrapFail(err, "create reminder")
 	}
@@ -151,10 +111,7 @@ func (s *server) handleUpdate(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "missing required parameter \"id\"")
 	}
 
-	var patch struct {
-		Data any        `json:"data"`
-		Time *time.Time `json:"time"`
-	}
+	var patch interviews.Interview
 
 	err = c.BodyParser(&patch)
 	if err != nil {
@@ -162,9 +119,13 @@ func (s *server) handleUpdate(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "bad patch format")
 	}
 
-	_, err = s.repo.Update(c.Context(), id, patch.Data, patch.Time)
+	err = s.repo.Update(c.Context(), repo.ByID(id), func(old interviews.Interview) interviews.Interview {
+		old.Data = cmp.Or(patch.Data, old.Data)
+		old.CandidateTg = cmp.Or(patch.CandidateTg, old.CandidateTg)
+		return old
+	})
 	if err != nil {
-		return errors.WrapFail(err, "update reminder")
+		return errors.WrapFail(err, "update interview")
 	}
 
 	return c.Status(http.StatusOK).Send(nil)
@@ -177,13 +138,9 @@ func (s *server) handleDelete(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "missing required parameter \"id\"")
 	}
 
-	deleted, err := s.repo.Delete(c.Context(), id)
+	err = s.repo.Delete(c.Context(), id)
 	if err != nil {
 		return errors.WrapFail(err, "delete reminder")
-	}
-
-	if !deleted {
-		return s.sendError(c, http.StatusNotFound, "nothing to delete")
 	}
 
 	return c.Status(http.StatusOK).Send(nil)
@@ -193,18 +150,23 @@ func (s *server) sendError(c *fiber.Ctx, status int, msg string) error {
 	return c.Status(status).JSON(map[string]string{"status": "ERROR", "message": msg})
 }
 
-func (s *server) getChannels(c *fiber.Ctx) []string {
-	separated := c.Query("channels", "default")
-	return strings.Split(separated, ",")
-}
 
 func (s *server) getIDOrErr(c *fiber.Ctx) (string, error) {
 	id := c.Query("id", "")
 	if id == "" {
-		return "", errors.Error("got empty \"id\" param of getByID request")
+		return "", errors.Error("got empty \"id\" param")
 	}
 
 	return id, nil
+}
+
+func (s *server) getCandidateTgOrErr(c *fiber.Ctx) (string, error) {
+	tg := c.Query("candidate", "")
+	if tg == "" {
+		return "", errors.Error("got empty \"candidate\" param")
+	}
+
+	return tg, nil
 }
 
 func (s *server) getAtOrErr(c *fiber.Ctx) (time.Time, error) {

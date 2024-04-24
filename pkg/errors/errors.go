@@ -32,9 +32,10 @@ func Wrap(err error, wrapper string, args ...any) error {
 	return fmt.Errorf("%s: %w", fmt.Sprintf(wrapper, args...), err)
 }
 
-func WrapFail(err error, whatFailed string) error {
+func WrapFail(err error, whatFailed string, args ...any) error {
 	if err == nil {
 		return nil
 	}
-	return Wrap(err, "%s %s", cannotPrefix, whatFailed)
+	wrapper := fmt.Sprintf(whatFailed, args...)
+	return Wrap(err, "%s %s", cannotPrefix, wrapper)
 }

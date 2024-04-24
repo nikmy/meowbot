@@ -6,17 +6,22 @@ type API interface {
 	// Create is API method for registering an interview. Data may contain confidential information.
 	Create(ctx context.Context, data any, interviewerTg string, candidateTg string) (id string, err error)
 
+	Delete(ctx context.Context, id string) error
+
+	// Find checks whether an interview has been created or not
+	Find(ctx context.Context, id string) (bool, error)
+
 	// Propose is API method for candidate which is used for asking the interviewer whether he/she
 	// can do interview in the proposed time intervals. Time must be unix timestamp UTC.
-	Propose(ctx context.Context, id string, intervals [][2]uint64) (err error)
+	Propose(ctx context.Context, id string, intervals [][2]int64) (err error)
 
 	// Accept and Decline are API methods for interviewer which is used for responding to interview
 	// time request sent by candidate. Accepted interval may be subinterval of one of proposed.
-	Accept(ctx context.Context, id string, interval [2]uint64) (err error)
+	Accept(ctx context.Context, id string, interval [2]int64) (err error)
 	Decline(ctx context.Context, id string) (err error)
 
 	// GetReadyAt returns list of interviews that have started and not finished at the given timestamp.
-	GetReadyAt(ctx context.Context, at uint64) (interviews []Interview, err error)
+	GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error)
 
 	// Cancel cancels the interview, making it done without results.
 	Cancel(ctx context.Context, id string, reason string) (err error)
@@ -24,6 +29,8 @@ type API interface {
 	// Done marks the interview done. Some logic can be added for sending results template to be fiiling in
 	// to the interviewer, or something else.
 	Done(ctx context.Context, id string) (err error)
+
+	Close(ctx context.Context) error
 }
 
 type Interview struct {
@@ -32,7 +39,7 @@ type Interview struct {
 	CandidateTg   string `json:"candidate"   bson:"candidate"`
 	Data          any    `json:"data"        bson:"data"`
 
-	Intervals [][2]uint64     `json:"intervals" bson:"intervals"`
+	Intervals [][2]int64     `json:"intervals" bson:"intervals"`
 	Status    InterviewStatus `json:"status"    bson:"status"`
 
 	CancelReason string `json:"cancel_reason" bson:"cancel_reason"`

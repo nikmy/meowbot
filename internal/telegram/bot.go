@@ -2,11 +2,15 @@ package telegram
 
 import (
 	"context"
+
 	"gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/repo"
+	"github.com/nikmy/meowbot/internal/interviews"
+	"github.com/nikmy/meowbot/internal/users"
 	"github.com/nikmy/meowbot/pkg/logger"
 )
+
+const USAGE = ""
 
 func New(logger logger.Logger, conf *Config) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
@@ -26,22 +30,15 @@ func New(logger logger.Logger, conf *Config) (*Bot, error) {
 type Bot struct {
 	*telebot.Bot
 
-	usersRepo   repo.Repo
-	logger logger.Logger
-	states map[string]State
+	ctx        context.Context
+	users      users.API
+	interviews interviews.API
+	logger     logger.Logger
 }
 
 func (b *Bot) Run(ctx context.Context) error {
-	b.Handle(telebot.OnCallback, b.handleClick)
-	go b.Start()
-	return nil
-}
-
-func (b *Bot) BindInline(button *telebot.InlineButton) error {
-	return nil
-}
-
-func (b *Bot) handleClick(c telebot.Context) error {
-	// TODO: routing
+	b.ctx = ctx
+	b.setupHandlers()
+	go b.Bot.Start()
 	return nil
 }
