@@ -31,20 +31,20 @@ var (
 
 func (b *Bot) setupHandlers() {
 	manager := fsm.NewManager(
-		b.Bot,
+		b.bot,
 		nil,
 		memory.NewStorage(),
 		nil,
 	)
 
-	manager.Bind("/me", fsm.AnyState, b.GetMe)
-	manager.Bind("/start", fsm.AnyState, b.Start)
-	manager.Bind("/match", fsm.AnyState, b.Match)
-	manager.Bind(telebot.OnText, chooseRoleState, b.ChooseRole)
-	manager.Bind(telebot.OnText, chooseIntervalState, b.TryInterval)
+	manager.Bind("/me", fsm.AnyState, b.getMe)
+	manager.Bind("/start", fsm.AnyState, b.start)
+	manager.Bind("/match", fsm.AnyState, b.match)
+	manager.Bind(telebot.OnText, chooseRoleState, b.chooseRole)
+	manager.Bind(telebot.OnText, chooseIntervalState, b.tryInterval)
 
-	manager.Bind(&iamCandidateBtn, chooseRoleState, b.ChooseRole)
-	manager.Bind(&iamInterviewerBtn, chooseRoleState, b.ChooseRole)
+	manager.Bind(&iamCandidateBtn, chooseRoleState, b.chooseRole)
+	manager.Bind(&iamInterviewerBtn, chooseRoleState, b.chooseRole)
 }
 
 func (b *Bot) setState(s fsm.Context, target fsm.State) {
@@ -56,10 +56,10 @@ func (b *Bot) setState(s fsm.Context, target fsm.State) {
 
 func (b *Bot) final(c telebot.Context, s fsm.Context, msg string, opts ...any) error {
 	b.setState(s, initialState)
-	return c.Send(msg, opts)
+	return c.Send(msg, opts...)
 }
 
-func (b *Bot) GetMe(c telebot.Context, s fsm.Context) error {
+func (b *Bot) getMe(c telebot.Context, s fsm.Context) error {
 	user, err := b.users.Get(b.ctx, c.Sender().Username)
 	if err != nil {
 		b.logger.Error(errors.WrapFail(err, "do Users.Get request"))
@@ -68,7 +68,7 @@ func (b *Bot) GetMe(c telebot.Context, s fsm.Context) error {
 
 	if user == nil {
 		b.setState(s, chooseRoleState)
-		return c.Send("Выберите свою роль", telebot.SendOptions{
+		return c.Send("Выберите свою роль", &telebot.SendOptions{
 			ReplyMarkup: &telebot.ReplyMarkup{
 				ForceReply: true,
 				ReplyKeyboard: [][]telebot.ReplyButton{
@@ -86,12 +86,12 @@ func (b *Bot) GetMe(c telebot.Context, s fsm.Context) error {
 	return b.final(c, s, fmt.Sprintf("Вы — %s", roleStr))
 }
 
-func (b *Bot) Start(c telebot.Context, s fsm.Context) error {
+func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 	b.setState(s, initialState)
 	return c.Send(USAGE)
 }
 
-func (b *Bot) Match(c telebot.Context, s fsm.Context) error {
+func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	args := strings.Fields(c.Text())
 	if len(args) != 2 {
 		return b.final(c, s, "Введите ID собеседования через пробел.")
@@ -132,7 +132,7 @@ func (b *Bot) Match(c telebot.Context, s fsm.Context) error {
 	)
 }
 
-func (b *Bot) ChooseRole(c telebot.Context, s fsm.Context) error {
+func (b *Bot) chooseRole(c telebot.Context, s fsm.Context) error {
 	if c.Text() == candStr {
 		err := b.users.Add(b.ctx, &users.User{
 			Intervals: nil,
@@ -161,7 +161,7 @@ func (b *Bot) ChooseRole(c telebot.Context, s fsm.Context) error {
 
 	return b.final(c, s, "Я не понимаю :(")
 }
-func (b *Bot) TryInterval(c telebot.Context, s fsm.Context) error {
+func (b *Bot) tryInterval(c telebot.Context, s fsm.Context) error {
 	left, err := time.Parse("02 01 2006 15 04", c.Text())
 	if err != nil {
 		return c.Send("Плохой формат даты.")

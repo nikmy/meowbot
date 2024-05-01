@@ -2,9 +2,25 @@ package interviews
 
 import (
 	"context"
-
 	"github.com/nikmy/meowbot/internal/repo"
+	"github.com/nikmy/meowbot/pkg/errors"
+	"github.com/nikmy/meowbot/pkg/logger"
+	"go.mongodb.org/mongo-driver/mongo"
 )
+
+func New(ctx context.Context, log logger.Logger, cfg repo.MongoConfig) (API, error) {
+	mongoRepo, err := repo.NewMongo[Interview](
+		ctx,
+		cfg,
+		log,
+		mongo.IndexModel{},
+	)
+	if err != nil {
+		return nil, errors.WrapFail(err, "setup mongo")
+	}
+
+	return &repoAPI{repo: mongoRepo}, nil
+}
 
 type repoAPI struct {
 	repo repo.Repo[Interview]

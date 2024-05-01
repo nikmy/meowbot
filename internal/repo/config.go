@@ -5,7 +5,7 @@ import (
 )
 
 type MongoConfig struct {
-	Interval time.Duration
+	Interval time.Duration `yaml:"interval"`
 
 	URL     string        `yaml:"url"`
 	Timeout time.Duration `yaml:"timeout"`

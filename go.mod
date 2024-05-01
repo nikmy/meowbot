@@ -9,6 +9,7 @@ require (
 	go.mongodb.org/mongo-driver v1.13.1
 	go.uber.org/zap v1.17.0
 	gopkg.in/telebot.v3 v3.2.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
