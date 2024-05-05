@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
-
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/interviews"

@@ -47,6 +47,7 @@ func NewMongo[T any](
 
 type mongoRepo[T any] struct {
 	coll *mongo.Collection
+	acid mongo.Session
 	log  logger.Logger
 }
 
@@ -94,8 +95,8 @@ func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, erro
 	return selected, errors.Join(errs)
 }
 
-func (r *mongoRepo[T]) Update(ctx context.Context, selector Filter, update func(T) T) error {
-	mongoFilter := r.mongoFilter(r.applyFilters(selector))
+func (r *mongoRepo[T]) Update(ctx context.Context, update func(T) T, filters ...Filter) error {
+	mongoFilter := r.mongoFilter(r.applyFilters(filters...))
 
 	result := r.coll.FindOne(ctx, mongoFilter)
 	if err := result.Err(); err != nil {
@@ -159,4 +160,30 @@ func (r *mongoRepo[T]) oidFilter(oid string) bson.M {
 	var objectID [12]byte
 	copy(objectID[:], oid)
 	return bson.M{"_id": primitive.ObjectID(objectID)}
+}
+
+func (r *mongoRepo[T]) Txn(ctx context.Context, do func() error) error {
+	session, err := r.coll.Database().Client().StartSession()
+	if err != nil {
+		return errors.WrapFail(err, "start mongo session")
+	}
+
+	err = mongo.WithSession(ctx, session, func(sc mongo.SessionContext) error {
+		err := session.StartTransaction()
+		if err != nil {
+			return errors.WrapFail(err, "begin transaction")
+		}
+
+		err = do()
+		if err != nil {
+			r.log.Infof("aborting txn because: %s", err.Error())
+			err = session.AbortTransaction(sc)
+			return errors.WrapFail(err, "abort transaction")
+		}
+
+		err = session.CommitTransaction(sc)
+		return errors.WrapFail(err, "commit transaction")
+	})
+
+	return errors.WrapFail(err, "perform mongo transaction")
 }

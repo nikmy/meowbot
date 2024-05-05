@@ -11,9 +11,16 @@ import (
 )
 
 type User struct {
+	Assigned []Interview // TODO: instead of Intervals
+
 	Intervals [][2]int64 `json:"intervals" bson:"intervals"`
 	Username  string     `json:"username" bson:"username"`
 	Role      Role       `json:"role"     bson:"role"`
+}
+
+type Interview struct {
+	ID string
+	TimeSlot [2]int64
 }
 
 type Role int
@@ -65,23 +72,108 @@ func (r *repoAPI) Match(ctx context.Context, targetInterval [2]int64) ([]User, e
 	)
 }
 
-func (r *repoAPI) Assign(ctx context.Context, interviewer User, interval [2]int64) (bool, error) {
-	// FIXME TODO: transaction
-	user, err := r.Get(ctx, interviewer.Username)
-	if err != nil {
-		return false, errors.WrapFail(err, "get interviewer")
-	}
+func (r *repoAPI) Assign(
+	ctx context.Context,
+	candidate string,
+	interviewer string,
+	interval [2]int64,
+	onSuccess func() error,
+) (bool, error) {
+	err := r.repo.Txn(ctx, func() error {
+		inter, err := r.Get(ctx, interviewer)
+		if err != nil {
+			return errors.WrapFail(err, "get interviewer")
+		}
 
-	intervals, assigned := addInterval(user.Intervals, interval)
-	if !assigned {
-		return false, nil
-	}
+		cand, err := r.Get(ctx, candidate)
+		if err != nil {
+			return errors.WrapFail(err, "get candidate")
+		}
 
-	err = r.repo.Update(ctx, repo.ByField("username", interviewer.Username), func(u User) User {
-		u.Intervals = intervals
-		return u
+		var assigned bool
+		inter.Intervals, assigned = addInterval(inter.Intervals, interval)
+		if !assigned {
+			return errors.Fail("assign interval for interviewer")
+		}
+
+		cand.Intervals, assigned = addInterval(cand.Intervals, interval)
+		if !assigned {
+			return errors.Fail("assign interval for candidate")
+		}
+
+		err = r.repo.Update(
+			ctx,
+			func(u User) User {
+				switch u.Username {
+				case interviewer:
+					u.Intervals = inter.Intervals
+				case candidate:
+					u.Intervals = cand.Intervals
+				}
+				return u
+			},
+			repo.Where(func(user User) bool {
+				return user.Username == candidate || user.Username == interviewer
+			}),
+		)
+		if err != nil {
+			return errors.WrapFail(err, "update users intervals")
+		}
+
+		if onSuccess != nil {
+			return onSuccess()
+		}
+		return nil
 	})
-	return err == nil, errors.WrapFail(err, "update user intervals")
+
+	return err == nil, errors.WrapFail(err, "assign interval to user")
+}
+
+func (r *repoAPI) Free(
+	ctx context.Context,
+	interviewer User,
+	interval [2]int64,
+	onSuccess func() error,
+) error {
+	panic("TODO")
+	//err := r.repo.Txn(ctx, func() error {
+	//	user, err := r.Get(ctx, interviewer.Username)
+	//	if err != nil {
+	//		return errors.WrapFail(err, "get interviewer")
+	//	}
+	//
+	//	idx := sort.Search(len(user.Intervals), func(i int) bool {
+	//		return user.Intervals[i][0] == interval[0]
+	//	})
+	//	if idx == len(user.Intervals) {
+	//		return errors.Error("no intervals with specified start")
+	//	}
+	//
+	//	if user.Intervals[idx][1] != interval[1] {
+	//		return errors.Error("no intervals with specified end")
+	//	}
+	//
+	//	intervals := slices.Delete(user.Intervals, idx, idx+1)
+	//
+	//	err = r.repo.Update(
+	//		ctx,
+	//		func(u User) User {
+	//			u.Intervals = intervals
+	//			return u
+	//		},
+	//		repo.ByField("username", interviewer.Username),
+	//	)
+	//	if err != nil {
+	//		return errors.WrapFail(err, "update user intervals")
+	//	}
+	//
+	//	if onSuccess != nil {
+	//		return onSuccess()
+	//	}
+	//	return nil
+	//})
+	//
+	//return errors.WrapFail(err, "free interval for user")
 }
 
 func addInterval(intervals [][2]int64, t [2]int64) ([][2]int64, bool) {

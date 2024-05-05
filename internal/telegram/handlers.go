@@ -3,6 +3,7 @@ package telegram
 import (
 	"fmt"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/vitaliy-ukiru/fsm-telebot"
@@ -40,6 +41,9 @@ func (b *Bot) setupHandlers() {
 	manager.Bind("/me", fsm.AnyState, b.getMe)
 	manager.Bind("/start", fsm.AnyState, b.start)
 	manager.Bind("/match", fsm.AnyState, b.match)
+
+	manager.Bind("/show_interviews", fsm.AnyState, b.showInterviews)
+
 	manager.Bind(telebot.OnText, chooseRoleState, b.chooseRole)
 	manager.Bind(telebot.OnText, chooseIntervalState, b.tryInterval)
 
@@ -176,7 +180,9 @@ func (b *Bot) tryInterval(c telebot.Context, s fsm.Context) error {
 	}
 
 	for len(free) > 0 {
-		assigned, err := b.users.Assign(b.ctx, free[0], interval)
+		assigned, err := b.users.Assign(b.ctx, c.Sender().Username, free[0].Username, interval, func() error {
+			return b.interviews.Schedule(b.ctx, c.Sender().Username, free[0].Username, interval)
+		})
 		if err != nil {
 			b.logger.Warn(errors.WrapFail(err, "assign interval to interviewer"))
 		}
@@ -199,4 +205,40 @@ func (b *Bot) tryInterval(c telebot.Context, s fsm.Context) error {
 	}
 
 	return b.final(c, s, "Назначили собеседование на %s", left.Format(time.RFC850))
+}
+
+// TODO: cfg
+var interviewListTmpl = template.Must(
+	template.New("interviewList").Parse(
+		`Ваши предстоящие интервью:{{ range . }}
+{{ index . 0 }} - {{ . 1 }}{{ end }}`),
+)
+
+func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
+	user, err := b.users.Get(b.ctx, c.Sender().Username)
+	if err != nil {
+		b.logger.Error(errors.WrapFail(err, "get user"))
+		return b.final(c, s, "Не могу найти :(")
+	}
+
+	if len(user.Intervals) == 0 {
+		return b.final(c, s, "У вас нет назначенных собеседований")
+	}
+
+	formatted := make([][2]string, 0, len(user.Intervals))
+	for _, interval := range user.Intervals {
+		formatted = append(formatted, [2]string{
+			time.UnixMilli(interval[0]).Format(time.DateTime),
+			time.UnixMilli(interval[1]).Format(time.DateTime),
+		})
+	}
+
+	var sb strings.Builder
+	err = interviewListTmpl.Execute(&sb, formatted)
+	if err != nil {
+		b.logger.Error(errors.WrapFail(err, "make interview list response"))
+		return b.final(c, s, "Ошибка сервера, попробуйте позже")
+	}
+
+	return b.final(c, s, sb.String())
 }

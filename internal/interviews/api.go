@@ -8,17 +8,10 @@ type API interface {
 
 	Delete(ctx context.Context, id string) error
 
+	Schedule(ctx context.Context, cand string, inter string, timeSlot [2]int64) error
+
 	// Find checks whether an interview has been created or not
 	Find(ctx context.Context, id string) (bool, error)
-
-	// Propose is API method for candidate which is used for asking the interviewer whether he/she
-	// can do interview in the proposed time intervals. Time must be unix timestamp UTC.
-	Propose(ctx context.Context, id string, intervals [][2]int64) (err error)
-
-	// Accept and Decline are API methods for interviewer which is used for responding to interview
-	// time request sent by candidate. Accepted interval may be subinterval of one of proposed.
-	Accept(ctx context.Context, id string, interval [2]int64) (err error)
-	Decline(ctx context.Context, id string) (err error)
 
 	// GetReadyAt returns list of interviews that have started and not finished at the given timestamp.
 	GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error)
@@ -39,8 +32,8 @@ type Interview struct {
 	CandidateTg   string `json:"candidate"   bson:"candidate"`
 	Data          any    `json:"data"        bson:"data"`
 
-	Intervals [][2]int64     `json:"intervals" bson:"intervals"`
-	Status    InterviewStatus `json:"status"    bson:"status"`
+	Interval [2]int64      `json:"intervals" bson:"intervals"`
+	Status   InterviewStatus `json:"status"    bson:"status"`
 
 	CancelReason string `json:"cancel_reason" bson:"cancel_reason"`
 }
@@ -51,14 +44,8 @@ const (
 	// StatusNew is set when interview has been created
 	StatusNew = InterviewStatus(iota) + 1
 
-	// StatusAsk is set when candidate proposed intervals
-	StatusAsk
-
-	// StatusAccepted is set when interviewer accepted interval
-	StatusAccepted
-
-	// StatusDeclined is set when interviewer declined candidate's intervals
-	StatusDeclined
+	// StatusScheduled is set when its tine is known
+	StatusScheduled
 
 	// StatusFinished is set when the interview is done
 	StatusFinished
