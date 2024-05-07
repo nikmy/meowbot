@@ -1,0 +1,11 @@
+version: '3.3'
+services:
+  bot:
+    image: 'myink/meowbot:latest'
+    depends_on:
+      - mongo
+  mongo:
+    image: 'mongo:latest'
+    container_name: 'mongo'
+    ports:
+      - '27100:27017'

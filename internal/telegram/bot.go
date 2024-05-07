@@ -14,7 +14,12 @@ import (
 const USAGE = "/me — получить информацию о своей роли\n" +
 	"/match <ID> — подоюрать время для собеседования (доступно для кандидата)"
 
-func New(logger logger.Logger, conf Config, mongoConf repo.MongoConfig) (*Bot, error) {
+func New(
+	logger logger.Logger,
+	conf Config,
+	interviewsCfg repo.Config,
+	usersCfg repo.Config,
+) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   conf.Token,
 		Updates: 256,
@@ -23,9 +28,10 @@ func New(logger logger.Logger, conf Config, mongoConf repo.MongoConfig) (*Bot, e
 		},
 	})
 	return &Bot{
-		bot:     b,
-		logger:  logger,
-		repoCfg: mongoConf,
+		bot:           b,
+		logger:        logger,
+		usersCfg:      usersCfg,
+		interviewsCfg: interviewsCfg,
 	}, err
 }
 
@@ -33,18 +39,27 @@ type Bot struct {
 	bot *telebot.Bot
 	ctx context.Context
 
-	repoCfg    repo.MongoConfig
-	users      users.API
-	interviews interviews.API
-	logger     logger.Logger
+	usersCfg repo.Config
+	users    users.API
+
+	interviewsCfg repo.Config
+	interviews    interviews.API
+
+	logger logger.Logger
 }
 
 func (b *Bot) Run(ctx context.Context) error {
-	ivRepo, err := interviews.New(ctx, b.logger, b.repoCfg)
+	ivRepo, err := interviews.New(ctx, b.logger, b.interviewsCfg)
 	if err != nil {
 		return errors.WrapFail(err, "init interviews repo")
 	}
 	b.interviews = ivRepo
+
+	uRepo, err := users.New(ctx, b.logger, b.usersCfg)
+	if err != nil {
+		return errors.WrapFail(err, "init users repo")
+	}
+	b.users = uRepo
 
 	b.ctx = ctx
 	b.setupHandlers()

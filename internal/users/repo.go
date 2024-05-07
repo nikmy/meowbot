@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"github.com/nikmy/meowbot/pkg/logger"
 	"slices"
 	"sort"
 	"time"
@@ -32,6 +33,15 @@ const (
 
 func (u User) Recipient() string {
 	return "@" + u.Username
+}
+
+func New(ctx context.Context, log logger.Logger, cfg repo.Config) (API, error) {
+	db, err := repo.New[User](ctx, cfg, log)
+	if err != nil {
+		return nil, errors.WrapFail(err, "init repo")
+	}
+
+	return &repoAPI{repo: db}, nil
 }
 
 type repoAPI struct {

@@ -22,7 +22,7 @@ func main() {
 		log.Panic(errors.WrapFail(err, "init logger"))
 	}
 
-	bot, err := telegram.New(log, cfg.Telegram, cfg.Mongo)
+	bot, err := telegram.New(log, cfg.Telegram, cfg.InterviewsDB, cfg.UsersDB)
 	if err != nil {
 		log.Panic(errors.WrapFail(err, "initialize bot service"))
 	}

@@ -4,6 +4,16 @@ import (
 	"time"
 )
 
+type dbKind string
+
+const (
+	mongoDB dbKind = "mongo"
+)
+
+type Config struct {
+	MongoCfg *MongoConfig `yaml:"mongo"`
+}
+
 type MongoConfig struct {
 	Interval time.Duration `yaml:"interval"`
 

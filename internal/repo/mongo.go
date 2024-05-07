@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,11 +12,22 @@ import (
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-func NewMongo[T any](
+func New[T any](
+	ctx context.Context,
+	cfg Config,
+	log logger.Logger,
+) (Repo[T], error) {
+	if cfg.MongoCfg != nil {
+		return newMongo[T](ctx, *cfg.MongoCfg, log)
+	}
+
+	panic("unknown repo db kind")
+}
+
+func newMongo[T any](
 	ctx context.Context,
 	cfg MongoConfig,
 	log logger.Logger,
-	collectionIndex mongo.IndexModel,
 ) (Repo[T], error) {
 	client, err := mongo.Connect(
 		ctx,
@@ -33,12 +45,6 @@ func NewMongo[T any](
 	}
 
 	collection := client.Database(cfg.Database).Collection(cfg.Collection)
-
-	_, err = collection.Indexes().CreateOne(ctx, collectionIndex)
-	if err != nil {
-		return nil, errors.WrapFail(err, "create index")
-	}
-
 	return &mongoRepo[T]{
 		coll: collection,
 		log:  log.With("mongo_repo"),

@@ -2,25 +2,28 @@ package main
 
 import (
 	"flag"
-	"github.com/nikmy/meowbot/internal/repo"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/internal/telegram"
 	"github.com/nikmy/meowbot/pkg/environment"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
 type Config struct {
-	Environment environment.Env `yaml:"Environment"`
-	Telegram    telegram.Config `yaml:"Telegram"`
-	Mongo repo.MongoConfig `yaml:"Mongo"`
+	Environment  environment.Env `yaml:"Environment"`
+	Telegram     telegram.Config `yaml:"Telegram"`
+	InterviewsDB repo.Config     `yaml:"InterviewsDB"`
+	UsersDB      repo.Config     `yaml:"UsersDB"`
 }
 
 func loadConfig() (*Config, error) {
-	path, err := filepath.Abs("config.yaml")
+	loadFlags()
+
+	path, err := filepath.Abs(*cfgFile)
 	if err != nil {
 		return nil, errors.WrapFail(err, "build path to config")
 	}
@@ -36,20 +39,24 @@ func loadConfig() (*Config, error) {
 		return nil, errors.WrapFail(err, "parse yaml")
 	}
 
-	if envFromFlags := getEnvFromFlags(); envFromFlags != nil {
+	if envFromFlags != nil {
 		cfg.Environment = *envFromFlags
 	}
 
 	return &cfg, nil
 }
 
-func getEnvFromFlags() *environment.Env {
-	raw := flag.String("env", "", "environment (dev, prod)")
-	flag.Parse()
-	if raw == nil {
-		return nil
-	}
+var (
+	envFromFlags *environment.Env
+	envRaw       = flag.String("env", "dev", "environment (dev, prod)")
+	cfgFile      = flag.String("config", "config.yaml", "path to a config file")
+)
 
-	env := environment.FromString(*raw)
-	return &env
+func loadFlags() {
+	flag.Parse()
+
+	if envRaw != nil {
+		envFromFlags = new(environment.Env)
+		*envFromFlags = environment.FromString(*envRaw)
+	}
 }

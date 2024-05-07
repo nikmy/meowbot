@@ -5,15 +5,13 @@ import (
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func New(ctx context.Context, log logger.Logger, cfg repo.MongoConfig) (API, error) {
-	mongoRepo, err := repo.NewMongo[Interview](
+func New(ctx context.Context, log logger.Logger, cfg repo.Config) (API, error) {
+	mongoRepo, err := repo.New[Interview](
 		ctx,
 		cfg,
 		log,
-		mongo.IndexModel{},
 	)
 	if err != nil {
 		return nil, errors.WrapFail(err, "setup mongo")
