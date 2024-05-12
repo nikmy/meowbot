@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"encoding/base64"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -15,18 +16,20 @@ import (
 func New[T any](
 	ctx context.Context,
 	cfg Config,
+	dataSource DataSource,
 	log logger.Logger,
 ) (Repo[T], error) {
 	if cfg.MongoCfg != nil {
-		return newMongo[T](ctx, *cfg.MongoCfg, log)
+		return newMongo[T](ctx, *cfg.MongoCfg, string(dataSource), log)
 	}
 
-	panic("unknown repo db kind")
+	panic("unknown database")
 }
 
 func newMongo[T any](
 	ctx context.Context,
 	cfg MongoConfig,
+	coll string,
 	log logger.Logger,
 ) (Repo[T], error) {
 	client, err := mongo.Connect(
@@ -44,7 +47,12 @@ func newMongo[T any](
 		return nil, errors.WrapFail(err, "connect to mongo db")
 	}
 
-	collection := client.Database(cfg.Database).Collection(cfg.Collection)
+	db := client.Database(cfg.Database)
+	if db == nil {
+		return nil, errors.WrapFail(err, "get database %s", cfg.Database)
+	}
+
+	collection := db.Collection(coll)
 	return &mongoRepo[T]{
 		coll: collection,
 		log:  log.With("mongo_repo"),
@@ -69,7 +77,10 @@ func (r *mongoRepo[T]) Create(ctx context.Context, data T) (string, error) {
 
 func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, error) {
 	f := r.applyFilters(filters...)
-	mongoFilter := r.mongoFilter(f)
+	mongoFilter, err := r.mongoFilter(f)
+	if err != nil {
+		return nil, errors.WrapFail(err, "make mongo filter")
+	}
 
 	c, err := r.coll.Find(ctx, mongoFilter)
 	if err != nil {
@@ -98,11 +109,14 @@ func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, erro
 		errs = append(errs, errors.WrapFail(err, "move cursor"))
 	}
 
-	return selected, errors.Join(errs)
+	return selected, errors.Join(errs...)
 }
 
 func (r *mongoRepo[T]) Update(ctx context.Context, update func(T) T, filters ...Filter) error {
-	mongoFilter := r.mongoFilter(r.applyFilters(filters...))
+	mongoFilter, err := r.mongoFilter(r.applyFilters(filters...))
+	if err != nil {
+		return errors.WrapFail(err, "make mongo filter")
+	}
 
 	result := r.coll.FindOne(ctx, mongoFilter)
 	if err := result.Err(); err != nil {
@@ -110,7 +124,7 @@ func (r *mongoRepo[T]) Update(ctx context.Context, update func(T) T, filters ...
 	}
 
 	var data T
-	err := result.Decode(&data)
+	err = result.Decode(&data)
 	if err != nil {
 		return errors.WrapFail(err, "decode data")
 	}
@@ -123,9 +137,14 @@ func (r *mongoRepo[T]) Update(ctx context.Context, update func(T) T, filters ...
 	return errors.WrapFail(err, "do upsert")
 }
 
-func (r *mongoRepo[T]) Delete(ctx context.Context, id string) error {
-	_, err := r.coll.DeleteOne(ctx, r.oidFilter(id))
-	return errors.WrapFail(err, "delete data by oid")
+func (r *mongoRepo[T]) Delete(ctx context.Context, id string) (bool, error) {
+	f, err := r.oidFilter(id)
+	if err != nil {
+		return false, errors.WrapFail(err, "make id filter")
+	}
+
+	res, err := r.coll.DeleteOne(ctx, f)
+	return res.DeletedCount == 1, errors.WrapFail(err, "delete data by oid")
 }
 
 func (r *mongoRepo[T]) Close(ctx context.Context) error {
@@ -140,32 +159,41 @@ func (r *mongoRepo[T]) makeID(iid any) (string, error) {
 	}
 
 	b := ([12]byte)(objID)
-	return string(b[:]), nil
+	return base64.StdEncoding.EncodeToString(b[:]), nil
 }
 
 func (r *mongoRepo[T]) applyFilters(filters ...Filter) *filter {
-	f := &filter{}
+	f := newFilter()
 	for _, fn := range filters {
 		fn(f)
 	}
 	return f
 }
 
-func (r *mongoRepo[T]) mongoFilter(f *filter) bson.M {
-	var mongoFilter bson.M
+func (r *mongoRepo[T]) mongoFilter(f *filter) (bson.M, error) {
+	mongoFilter := bson.M{}
 	if f.id != nil {
-		mongoFilter = r.oidFilter(*f.id)
+		var err error
+		mongoFilter, err = r.oidFilter(*f.id)
+		if err != nil {
+			return nil, errors.WrapFail(err, "make id filter")
+		}
 	}
 	for field, val := range f.fields {
 		mongoFilter[field] = val
 	}
-	return mongoFilter
+	return mongoFilter, nil
 }
 
-func (r *mongoRepo[T]) oidFilter(oid string) bson.M {
+func (r *mongoRepo[T]) oidFilter(id string) (bson.M, error) {
+	oid, err := base64.StdEncoding.DecodeString(id)
+	if err != nil {
+		return nil, errors.WrapFail(err, "decode id as base64")
+	}
+
 	var objectID [12]byte
 	copy(objectID[:], oid)
-	return bson.M{"_id": primitive.ObjectID(objectID)}
+	return bson.M{"_id": primitive.ObjectID(objectID)}, nil
 }
 
 func (r *mongoRepo[T]) Txn(ctx context.Context, do func() error) error {

@@ -1,6 +1,8 @@
 package repo
 
-
+func newFilter() *filter {
+	return &filter{fields: map[string]any{}}
+}
 
 type filter struct {
 	fields map[string]any

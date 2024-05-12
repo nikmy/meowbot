@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"github.com/nikmy/meowbot/internal/interviews"
 	"github.com/nikmy/meowbot/pkg/logger"
 	"slices"
 	"sort"
@@ -12,31 +13,33 @@ import (
 )
 
 type User struct {
-	Assigned []Interview // TODO: instead of Intervals
-
-	Intervals [][2]int64 `json:"intervals" bson:"intervals"`
-	Username  string     `json:"username" bson:"username"`
-	Role      Role       `json:"role"     bson:"role"`
+	Assigned []Interview `json:"assigned" bson:"assigned"`
+	Username string      `json:"username" bson:"username"`
+	Employee bool        `json:"employee" bson:"employee"`
 }
 
 type Interview struct {
-	ID string
-	TimeSlot [2]int64
+	ID       string   `json:"id"        bson:"id"`
+	Role     Role     `json:"role"      bson:"role"`
+	TimeSlot [2]int64 `json:"time_slot" bson:"time_slot"`
 }
 
-type Role int
+func getIntervals(interviews []Interview) [][2]int64 {
+	intervals := make([][2]int64, 0, len(interviews))
+	for _, i := range interviews {
+		intervals = append(intervals, i.TimeSlot)
+	}
+	return intervals
+}
 
-const (
-	Interviewer = Role(iota)
-	Candidate
-)
+type Role = interviews.Role
 
 func (u User) Recipient() string {
-	return "@" + u.Username
+	return u.Username
 }
 
-func New(ctx context.Context, log logger.Logger, cfg repo.Config) (API, error) {
-	db, err := repo.New[User](ctx, cfg, log)
+func New(ctx context.Context, log logger.Logger, cfg repo.Config, src repo.DataSource) (API, error) {
+	db, err := repo.New[User](ctx, cfg, src, log)
 	if err != nil {
 		return nil, errors.WrapFail(err, "init repo")
 	}
@@ -64,7 +67,7 @@ func (r *repoAPI) Get(ctx context.Context, username string) (*User, error) {
 	}
 
 	if len(users) == 0 {
-		return nil, errors.Error("no user with name %s", username)
+		return nil, nil
 	}
 
 	return &users[0], nil
@@ -75,9 +78,9 @@ var minLen = time.Hour.Milliseconds() // TODO: config
 func (r *repoAPI) Match(ctx context.Context, targetInterval [2]int64) ([]User, error) {
 	return r.repo.Select(
 		ctx,
-		repo.ByField("role", Interviewer),
+		repo.ByField("employee", true),
 		repo.Where(func(u User) bool {
-			return intersect(u.Intervals, targetInterval, minLen)
+			return !intersect(getIntervals(u.Assigned), targetInterval, minLen)
 		}),
 	)
 }
@@ -86,7 +89,7 @@ func (r *repoAPI) Assign(
 	ctx context.Context,
 	candidate string,
 	interviewer string,
-	interval [2]int64,
+	interview Interview,
 	onSuccess func() error,
 ) (bool, error) {
 	err := r.repo.Txn(ctx, func() error {
@@ -100,13 +103,12 @@ func (r *repoAPI) Assign(
 			return errors.WrapFail(err, "get candidate")
 		}
 
-		var assigned bool
-		inter.Intervals, assigned = addInterval(inter.Intervals, interval)
+		ivIdx, assigned := addInterval(getIntervals(inter.Assigned), interview.TimeSlot)
 		if !assigned {
 			return errors.Fail("assign interval for interviewer")
 		}
 
-		cand.Intervals, assigned = addInterval(cand.Intervals, interval)
+		cdIdx, assigned := addInterval(getIntervals(cand.Assigned), interview.TimeSlot)
 		if !assigned {
 			return errors.Fail("assign interval for candidate")
 		}
@@ -116,9 +118,11 @@ func (r *repoAPI) Assign(
 			func(u User) User {
 				switch u.Username {
 				case interviewer:
-					u.Intervals = inter.Intervals
+					interview.Role = interviews.RoleInterviewer
+					u.Assigned = slices.Insert(u.Assigned, ivIdx, interview)
 				case candidate:
-					u.Intervals = cand.Intervals
+					interview.Role = interviews.RoleCandidate
+					u.Assigned = slices.Insert(u.Assigned, cdIdx, interview)
 				}
 				return u
 			},
@@ -186,17 +190,12 @@ func (r *repoAPI) Free(
 	//return errors.WrapFail(err, "free interval for user")
 }
 
-func addInterval(intervals [][2]int64, t [2]int64) ([][2]int64, bool) {
+func addInterval(intervals [][2]int64, t [2]int64) (int, bool) {
 	idx := sort.Search(len(intervals), func(i int) bool {
 		return intervals[i][0] >= t[0]
 	})
 
-	if idx < len(intervals) && intervals[idx][0] < t[1] {
-		return intervals, false
-	}
-
-	intervals = slices.Insert(intervals, idx)
-	return intervals, true
+	return idx, idx == len(intervals) || intervals[idx][0] >= t[1]
 }
 
 func intersect(intervals [][2]int64, t [2]int64, minIntersection int64) bool {

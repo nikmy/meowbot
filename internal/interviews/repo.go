@@ -7,12 +7,8 @@ import (
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-func New(ctx context.Context, log logger.Logger, cfg repo.Config) (API, error) {
-	mongoRepo, err := repo.New[Interview](
-		ctx,
-		cfg,
-		log,
-	)
+func New(ctx context.Context, log logger.Logger, cfg repo.Config, src repo.DataSource) (API, error) {
+	mongoRepo, err := repo.New[Interview](ctx, cfg, src, log)
 	if err != nil {
 		return nil, errors.WrapFail(err, "setup mongo")
 	}
@@ -24,34 +20,42 @@ type repoAPI struct {
 	repo repo.Repo[Interview]
 }
 
-func (r *repoAPI) Schedule(ctx context.Context, cand string, inter string, slot [2]int64) error {
+func (r *repoAPI) Schedule(ctx context.Context, id string, interviewer string, slot [2]int64) error {
 	return r.repo.Update(
 		ctx,
 		func(i Interview) Interview {
+			i.InterviewerTg = interviewer
 			i.Interval = slot
 			return i
 		},
-		repo.ByField("candidate", cand),
-		repo.ByField("interviewer", inter),
+		repo.ByID(id),
 	)
 }
 
-func (r *repoAPI) Create(ctx context.Context, data any, interviewerTg string, candidateTg string) (string, error) {
+func (r *repoAPI) Create(ctx context.Context, data []byte, candidateTg string) (string, error) {
 	return r.repo.Create(ctx, Interview{
-		InterviewerTg: interviewerTg,
 		CandidateTg:   candidateTg,
 		Data:          data,
 		Status:        StatusNew,
 	})
 }
 
-func (r *repoAPI) Delete(ctx context.Context, id string) error {
+func (r *repoAPI) Delete(ctx context.Context, id string) (bool, error) {
 	return r.repo.Delete(ctx, id)
 }
 
-func (r *repoAPI) Find(ctx context.Context, id string) (bool, error) {
+func (r *repoAPI) Find(ctx context.Context, id string) (*Interview, error) {
 	found, err := r.repo.Select(ctx, repo.ByID(id))
-	return len(found) == 1, err
+	if len(found) == 0 {
+		return nil, err
+	}
+
+	i := found[0]
+	return &i, err
+}
+
+func (r *repoAPI) FindByCandidate(ctx context.Context, candidate string) ([]Interview, error) {
+	return r.repo.Select(ctx, repo.ByField("candidate", candidate))
 }
 
 func (r *repoAPI) GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error) {
@@ -60,10 +64,10 @@ func (r *repoAPI) GetReadyAt(ctx context.Context, at int64) (interviews []Interv
 	}))
 }
 
-func (r *repoAPI) Cancel(ctx context.Context, id string, reason string) (err error) {
+func (r *repoAPI) Cancel(ctx context.Context, id string, side Role) (err error) {
 	return r.repo.Update(ctx, func(i Interview) Interview {
 		i.Status = StatusCancelled
-		i.CancelReason = reason
+		i.CancelledBy = side
 		return i
 	}, repo.ByID(id))
 }

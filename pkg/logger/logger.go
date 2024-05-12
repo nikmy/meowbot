@@ -50,35 +50,35 @@ func (w *wrapper) With(label string) Logger {
 }
 
 func (w *wrapper) Debug(err error) {
-	if w.base.Desugar().Core().Enabled(zap.DebugLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.DebugLevel) {
 		return
 	}
 	w.base.Debugf("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Info(err error) {
-	if w.base.Desugar().Core().Enabled(zap.InfoLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.InfoLevel) {
 		return
 	}
 	w.base.Infof("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Warn(err error) {
-	if w.base.Desugar().Core().Enabled(zap.WarnLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.WarnLevel) {
 		return
 	}
 	w.base.Warnf("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Error(err error) {
-	if w.base.Desugar().Core().Enabled(zap.ErrorLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.ErrorLevel) {
 		return
 	}
 	w.base.Errorf("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Panic(err error) {
-	if w.base.Desugar().Core().Enabled(zap.PanicLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.PanicLevel) {
 		return
 	}
 	w.base.Panicf("%s", err)
@@ -86,35 +86,35 @@ func (w *wrapper) Panic(err error) {
 }
 
 func (w *wrapper) Debugf(format string, args ...any) {
-	if w.base.Desugar().Core().Enabled(zap.DebugLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.DebugLevel) {
 		return
 	}
 	w.base.Debugf(format, args...)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Infof(format string, args ...any) {
-	if w.base.Desugar().Core().Enabled(zap.InfoLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.InfoLevel) {
 		return
 	}
 	w.base.Infof(format, args...)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Warnf(format string, args ...any) {
-	if w.base.Desugar().Core().Enabled(zap.WarnLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.WarnLevel) {
 		return
 	}
 	w.base.Warnf(format, args...)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Errorf(format string, args ...any) {
-	if w.base.Desugar().Core().Enabled(zap.ErrorLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.ErrorLevel) {
 		return
 	}
 	w.base.Errorf(format, args...)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Panicf(format string, args ...any) {
-	if w.base.Desugar().Core().Enabled(zap.PanicLevel) {
+	if !w.base.Desugar().Core().Enabled(zap.PanicLevel) {
 		return
 	}
 	w.base.Panicf(format, args...)

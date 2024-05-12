@@ -4,15 +4,11 @@ import (
 	"time"
 )
 
-type dbKind string
-
-const (
-	mongoDB dbKind = "mongo"
-)
-
 type Config struct {
 	MongoCfg *MongoConfig `yaml:"mongo"`
 }
+
+type DataSource string
 
 type MongoConfig struct {
 	Interval time.Duration `yaml:"interval"`
@@ -20,8 +16,7 @@ type MongoConfig struct {
 	URL     string        `yaml:"url"`
 	Timeout time.Duration `yaml:"timeout"`
 
-	Database   string `yaml:"database"`
-	Collection string `yaml:"collection"`
+	Database string `yaml:"database"`
 
 	Auth struct {
 		Username string `yaml:"username"`

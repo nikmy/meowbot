@@ -11,14 +11,12 @@ import (
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-const USAGE = "/me — получить информацию о своей роли\n" +
-	"/match <ID> — подоюрать время для собеседования (доступно для кандидата)"
-
 func New(
 	logger logger.Logger,
 	conf Config,
-	interviewsCfg repo.Config,
-	usersCfg repo.Config,
+	dbConf repo.Config,
+	interviewsSrc repo.DataSource,
+	usersSrc repo.DataSource,
 ) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   conf.Token,
@@ -30,8 +28,9 @@ func New(
 	return &Bot{
 		bot:           b,
 		logger:        logger,
-		usersCfg:      usersCfg,
-		interviewsCfg: interviewsCfg,
+		dbConf:        dbConf,
+		usersSrc:      usersSrc,
+		interviewsSrc: interviewsSrc,
 	}, err
 }
 
@@ -39,23 +38,25 @@ type Bot struct {
 	bot *telebot.Bot
 	ctx context.Context
 
-	usersCfg repo.Config
+	dbConf repo.Config
+
+	usersSrc repo.DataSource
 	users    users.API
 
-	interviewsCfg repo.Config
+	interviewsSrc repo.DataSource
 	interviews    interviews.API
 
 	logger logger.Logger
 }
 
 func (b *Bot) Run(ctx context.Context) error {
-	ivRepo, err := interviews.New(ctx, b.logger, b.interviewsCfg)
+	ivRepo, err := interviews.New(ctx, b.logger, b.dbConf, b.interviewsSrc)
 	if err != nil {
 		return errors.WrapFail(err, "init interviews repo")
 	}
 	b.interviews = ivRepo
 
-	uRepo, err := users.New(ctx, b.logger, b.usersCfg)
+	uRepo, err := users.New(ctx, b.logger, b.dbConf, b.usersSrc)
 	if err != nil {
 		return errors.WrapFail(err, "init users repo")
 	}

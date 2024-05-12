@@ -1,11 +1,14 @@
 version: '3.3'
 services:
   bot:
-    image: 'myink/meowbot:latest'
+    image: 'myink/interview-planner-tgbot:latest'
     depends_on:
       - mongo
   mongo:
     image: 'mongo:latest'
     container_name: 'mongo'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
     ports:
       - '27100:27017'

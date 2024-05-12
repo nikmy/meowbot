@@ -10,7 +10,7 @@ type Repo[T any] interface {
 	Create(ctx context.Context, data T) (id string, err error)
 	Select(ctx context.Context, filters ...Filter) (selected []T, err error)
 	Update(ctx context.Context, update func(T) T, filters ...Filter) (err error)
-	Delete(ctx context.Context, id string) (err error)
+	Delete(ctx context.Context, id string) (deleted bool, err error)
 
 	Close(ctx context.Context) error
 }

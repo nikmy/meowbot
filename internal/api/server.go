@@ -78,7 +78,7 @@ func (s *server) Shutdown(ctx context.Context) error {
 		errs = append(errs, errors.WrapFail(err, "shutdown http server"))
 	}
 
-	return errors.Join(errs)
+	return errors.Join(errs...)
 }
 
 func (s *server) setupRoutes() {
@@ -119,11 +119,13 @@ func (s *server) handleUpdate(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "bad patch format")
 	}
 
-	err = s.repo.Update(c.Context(), repo.ByID(id), func(old interviews.Interview) interviews.Interview {
-		old.Data = cmp.Or(patch.Data, old.Data)
+	err = s.repo.Update(c.Context(), func(old interviews.Interview) interviews.Interview {
+		if len(patch.Data) > 0 {
+			old.Data = patch.Data
+		}
 		old.CandidateTg = cmp.Or(patch.CandidateTg, old.CandidateTg)
 		return old
-	})
+	}, repo.ByID(id))
 	if err != nil {
 		return errors.WrapFail(err, "update interview")
 	}
@@ -138,9 +140,13 @@ func (s *server) handleDelete(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "missing required parameter \"id\"")
 	}
 
-	err = s.repo.Delete(c.Context(), id)
+	found, err := s.repo.Delete(c.Context(), id)
 	if err != nil {
-		return errors.WrapFail(err, "delete reminder")
+		return errors.WrapFail(err, "delete interview")
+	}
+
+	if !found {
+		return c.Status(http.StatusNotFound).Send(nil)
 	}
 
 	return c.Status(http.StatusOK).Send(nil)
@@ -149,7 +155,6 @@ func (s *server) handleDelete(c *fiber.Ctx) error {
 func (s *server) sendError(c *fiber.Ctx, status int, msg string) error {
 	return c.Status(status).JSON(map[string]string{"status": "ERROR", "message": msg})
 }
-
 
 func (s *server) getIDOrErr(c *fiber.Ctx) (string, error) {
 	id := c.Query("id", "")

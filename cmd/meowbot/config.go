@@ -14,10 +14,16 @@ import (
 )
 
 type Config struct {
-	Environment  environment.Env `yaml:"Environment"`
-	Telegram     telegram.Config `yaml:"Telegram"`
-	InterviewsDB repo.Config     `yaml:"InterviewsDB"`
-	UsersDB      repo.Config     `yaml:"UsersDB"`
+	Environment environment.Env `yaml:"Environment"`
+	Telegram    telegram.Config `yaml:"Telegram"`
+
+	Database struct {
+		Storage    repo.Config     `yaml:"storage"`
+		Sources struct{
+			Interviews repo.DataSource `yaml:"interviews"`
+			Users      repo.DataSource `yaml:"users"`
+		} `yaml:"sources"`
+	} `yaml:"Database"`
 }
 
 func loadConfig() (*Config, error) {

@@ -12,7 +12,7 @@ var (
 
 const cannotPrefix = "cannot"
 
-func Join(errs []error) error {
+func Join(errs... error) error {
 	return errors.Join(errs...)
 }
 
