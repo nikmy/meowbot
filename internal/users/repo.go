@@ -15,8 +15,12 @@ type User struct {
 	Employee bool        `json:"employee" bson:"employee"`
 }
 
+type UserDiff struct {
+	Username *string
+	Employee *bool
+}
+
 type Interview struct {
-	ID       string   `json:"id"        bson:"id"`
 	Role     Role     `json:"role"      bson:"role"`
 	TimeSlot [2]int64 `json:"time_slot" bson:"time_slot"`
 }
@@ -32,7 +36,7 @@ func getIntervals(interviews []Interview) [][2]int64 {
 type Role = interviews.Role
 
 func (u User) Recipient() string {
-	return "@" + u.Username
+	return u.Username
 }
 
 func New(ctx context.Context, log logger.Logger, cfg repo.Config, src repo.DataSource) (API, error) {
@@ -48,13 +52,19 @@ type repoAPI struct {
 	repo repo.Repo[User]
 }
 
-func (r *repoAPI) Add(ctx context.Context, user *User) error {
-	if user == nil {
-		return nil
-	}
-
-	_, err := r.repo.Create(ctx, *user)
-	return err
+func (r *repoAPI) Upsert(ctx context.Context, user UserDiff) error {
+	return r.repo.Update(
+		ctx,
+		func(u *User) {
+			if user.Employee != nil {
+				u.Employee = *user.Employee
+			}
+			if user.Username != nil {
+				u.Username = *user.Username
+			}
+		},
+		repo.ByField("username", user.Username),
+	)
 }
 
 func (r *repoAPI) Get(ctx context.Context, username string) (*User, error) {
@@ -88,7 +98,7 @@ func (r *repoAPI) Assign(
 	interview Interview,
 	onSuccess func() error,
 ) (bool, error) {
-	err := r.repo.Txn(ctx, func() error {
+	ok, err := r.repo.Txn(ctx, func() error {
 		inter, err := r.Get(ctx, interviewer)
 		if err != nil {
 			return errors.WrapFail(err, "get interviewer")
@@ -111,7 +121,7 @@ func (r *repoAPI) Assign(
 
 		err = r.repo.Update(
 			ctx,
-			func(u User) User {
+			func(u *User) {
 				switch u.Username {
 				case interviewer:
 					interview.Role = interviews.RoleInterviewer
@@ -120,7 +130,6 @@ func (r *repoAPI) Assign(
 					interview.Role = interviews.RoleCandidate
 					u.Assigned = slices.Insert(u.Assigned, cdIdx, interview)
 				}
-				return u
 			},
 			repo.Where(func(user User) bool {
 				return user.Username == candidate || user.Username == interviewer
@@ -136,7 +145,10 @@ func (r *repoAPI) Assign(
 		return nil
 	})
 
-	return err == nil, errors.WrapFail(err, "assign interval to user")
+	if err == nil && !ok {
+		err = errors.Error("transaction aborted")
+	}
+	return ok, errors.WrapFail(err, "assign interval to user")
 }
 
 func (r *repoAPI) Free(

@@ -1,10 +1,11 @@
 package telegram
 
 import (
+	"cmp"
 	"fmt"
 	"github.com/nikmy/meowbot/internal/interviews"
+	"slices"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/vitaliy-ukiru/fsm-telebot"
@@ -22,7 +23,7 @@ const (
 	matchReadIntervalState fsm.State = "chooseInterval"
 
 	createReadInfoState fsm.State = "crReadInfo"
-	createReadCTgState fsm.State = "crReadTg"
+	createReadCTgState  fsm.State = "crReadTg"
 
 	deleteReadIIDState fsm.State = "delReadIID"
 
@@ -34,7 +35,9 @@ const USAGE = "Доступные команды:\n" +
 	"/show_interviews — показать все мои собеседования\n" +
 	"/create — создать собеседование\n" +
 	"/delete — удалить собеседование\n" +
-	"/cancel — отменить запланированное собеседование"
+	"/cancel — отменить запланированное собеседование\n" +
+	"/join — присоединиться к команде интервьюеров\n" +
+	"/leave — перестать быть интервьюером\n"
 
 func (b *Bot) setupHandlers() {
 	manager := fsm.NewManager(
@@ -62,6 +65,9 @@ func (b *Bot) setupHandlers() {
 
 	manager.Bind("/cancel", initialState, b.startCancel)
 	manager.Bind(telebot.OnText, cancelReadIIDState, b.cancel)
+
+	manager.Bind("/join", initialState, b.joinTeam)
+	manager.Bind("/leave", initialState, b.leaveTeam)
 }
 
 func (b *Bot) setState(s fsm.Context, target fsm.State) {
@@ -139,14 +145,10 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 
 	free, err := b.users.Match(b.ctx, interval)
 	if err != nil {
-		b.logger.Error(errors.WrapFail(err, "do Users.Mathc request"))
-		return b.final(c, s, "Что-то пошло не так, попробуйте позже.")
+		return b.fail(c, s, errors.WrapFail(err, "do Users.Mathc request"))
 	}
 
-	interview := users.Interview{
-		ID:       iid,
-		TimeSlot: interval,
-	}
+	interview := users.Interview{TimeSlot: interval}
 
 	sender := c.Sender()
 	if sender == nil {
@@ -173,16 +175,8 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		)
 	}
 
-	return b.final(c, s, "Назначили собеседование на %s", left.Format(time.RFC850))
+	return b.final(c, s, fmt.Sprintf("Назначили собеседование на %s", left.Format(time.DateTime)))
 }
-
-var interviewListTmpl = template.Must(
-	template.New("interviewList").Parse(
-		`Собеседования, где я кандидат:{{ range index . 1 }}
-{{ . }}{{ end }}
-Собеседования, где я интервьюер:{{ range index . 0 }}
- {{ . }}{{ end }}`),
-)
 
 func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
@@ -190,51 +184,54 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	user, err := b.users.Get(b.ctx, sender.Username)
-	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "get user"))
-	}
-
-	if user == nil {
-		return b.final(c, s, "У вас нет назначенных собеседований")
-	}
-
-	asCandidate, err := b.interviews.FindByCandidate(b.ctx, sender.Username)
+	assigned, err := b.interviews.FindByUser(b.ctx, sender.Username)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "find by candidate"))
 	}
 
-	if len(asCandidate) == 0 && len(user.Assigned) == 0 {
+	if len(assigned) == 0 {
 		return b.final(c, s, "У вас нет назначенных собеседований")
 	}
 
-	var formatted [2][]string
-	for _, i := range asCandidate {
-		if i.Interval[0] == 0 {
-			formatted[interviews.RoleCandidate] = append(formatted[interviews.RoleCandidate], "не назначено")
+	slices.SortFunc(assigned, func(a, b interviews.Interview) int {
+		return cmp.Or(
+			cmp.Compare(a.Interval[0], b.Interval[0]),
+			cmp.Compare(a.Interval[1], b.Interval[1]),
+		)
+	})
+
+	var sb strings.Builder
+
+	for _, i := range assigned {
+		sb.WriteRune('`')
+		sb.WriteString(i.ID)
+		sb.WriteRune('`')
+
+		sb.WriteString(" ")
+		sb.WriteString(i.Vacancy)
+
+		sb.WriteString(" (")
+		switch sender.Username {
+		case i.InterviewerTg:
+			sb.WriteRune('И')
+		case i.CandidateTg:
+			sb.WriteRune('К')
 		}
-		formatted[interviews.RoleCandidate] = append(formatted[interviews.RoleCandidate], fmt.Sprintf(
-			"%s — %s",
+		sb.WriteString("): ")
+
+		if i.Interval[0] == 0 {
+			sb.WriteString("не запланировано;\n")
+			continue
+		}
+
+		sb.WriteString(fmt.Sprintf(
+			"%s — %s;\n",
 			time.UnixMilli(i.Interval[0]).Format(time.DateTime),
 			time.UnixMilli(i.Interval[1]).Format(time.DateTime),
 		))
 	}
 
-	for _, i := range user.Assigned {
-		formatted[interviews.RoleInterviewer] = append(formatted[i.Role], fmt.Sprintf(
-			"%s — %s",
-			time.UnixMilli(i.TimeSlot[0]).Format(time.DateTime),
-			time.UnixMilli(i.TimeSlot[1]).Format(time.DateTime),
-		))
-	}
-
-	var sb strings.Builder
-	err = interviewListTmpl.Execute(&sb, formatted)
-	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "make interview list response"))
-	}
-
-	return b.final(c, s, sb.String())
+	return b.final(c, s, sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
 }
 
 func (b *Bot) startCreate(c telebot.Context, s fsm.Context) error {
@@ -267,14 +264,9 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 	}
 	tg = tg[1:]
 
-	u, err := b.users.Get(b.ctx, tg)
-	if err == nil && u == nil {
-		b.logger.Debugf("creating user '%s'", tg)
-		err = b.users.Add(b.ctx, &users.User{Username: tg})
-	}
-
+	err = b.users.Upsert(b.ctx, users.UserDiff{Username: &tg})
 	if err != nil {
-		b.logger.Error(err)
+		b.logger.Error(errors.WrapFail(err, "upsert user"))
 		return b.fail(c, s, err)
 	}
 
@@ -289,6 +281,18 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 		fmt.Sprintf("Создано собеседование с id `%s`", id),
 		&telebot.SendOptions{ParseMode: telebot.ModeMarkdown},
 	)
+
+	//_, notifyErr := b.bot.Send(
+	//	users.User{Username: tg},
+	//	fmt.Sprintf(
+	//		"Вы — кандидат на вакансию %s с ID `%s`. Вы можете выбрать время через команду /match",
+	//		vac, id,
+	//	),
+	//	&telebot.SendOptions{ParseMode: telebot.ModeMarkdown},
+	//)
+	//if notifyErr != nil {
+	//	b.logger.Error(errors.WrapFail(notifyErr, "send init notification"))
+	//}
 }
 
 func (b *Bot) startDelete(c telebot.Context, s fsm.Context) error {
@@ -313,36 +317,78 @@ func (b *Bot) delete(c telebot.Context, s fsm.Context) error {
 
 func (b *Bot) startCancel(c telebot.Context, s fsm.Context) error {
 	b.setState(s, cancelReadIIDState)
-	return c.Send("")
+	return c.Send("Введите ID собеседования")
 }
 
 func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 	iid := c.Text()
-
-	i, err := b.interviews.Find(b.ctx, iid)
-	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
-	}
-
-	if i == nil {
-		return b.final(c, s, "Собеседование не найдено")
-	}
 
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	side := interviews.RoleInterviewer
-	if i.CandidateTg[1:] == sender.Username {
-		side = interviews.RoleCandidate
-	}
+	ok, err := b.interviews.Txn(b.ctx, func() error {
+		i, err := b.interviews.Find(b.ctx, iid)
+		if err != nil {
+			return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
+		}
 
-	err = b.interviews.Cancel(b.ctx, iid, side)
+		if i == nil {
+			return b.final(c, s, "Собеседование не найдено")
+		}
+
+		side := interviews.RoleInterviewer
+		if i.CandidateTg == sender.Username {
+			side = interviews.RoleCandidate
+		}
+
+		return b.interviews.Cancel(b.ctx, iid, side)
+	})
 	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "cancel interview"))
+		return b.fail(c, s, errors.WrapFail(err, "perform cancel txn"))
+	}
+	if !ok {
+		return b.fail(c, s, errors.Error("interview cancellation has been aborted"))
 	}
 
-	// TODO: notify other side
 	return b.final(c, s, "Собеседование отменено")
+}
+
+func (b *Bot) joinTeam(c telebot.Context, s fsm.Context) error {
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	mark := true
+
+	err := b.users.Upsert(b.ctx, users.UserDiff{
+		Username: &sender.Username,
+		Employee: &mark,
+	})
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
+	}
+
+	return b.final(c, s, "Теперь вы — интервьюер! Ждите собеседований ;)")
+}
+
+func (b *Bot) leaveTeam(c telebot.Context, s fsm.Context) error {
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	mark := false
+
+	err := b.users.Upsert(b.ctx, users.UserDiff{
+		Username: &sender.Username,
+		Employee: &mark,
+	})
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
+	}
+
+	return b.final(c, s, "Вы больше не интервьюер (или им не были)")
 }

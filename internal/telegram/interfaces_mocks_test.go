@@ -877,19 +877,19 @@ func (mr *MockinterviewsApiMockRecorder) Find(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Find", reflect.TypeOf((*MockinterviewsApi)(nil).Find), ctx, id)
 }
 
-// FindByCandidate mocks base method.
-func (m *MockinterviewsApi) FindByCandidate(ctx context.Context, candidate string) ([]interviews.Interview, error) {
+// FindByUser mocks base method.
+func (m *MockinterviewsApi) FindByUser(ctx context.Context, user string) ([]interviews.Interview, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByCandidate", ctx, candidate)
+	ret := m.ctrl.Call(m, "FindByUser", ctx, user)
 	ret0, _ := ret[0].([]interviews.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FindByCandidate indicates an expected call of FindByCandidate.
-func (mr *MockinterviewsApiMockRecorder) FindByCandidate(ctx, candidate any) *gomock.Call {
+// FindByUser indicates an expected call of FindByUser.
+func (mr *MockinterviewsApiMockRecorder) FindByUser(ctx, user any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByCandidate", reflect.TypeOf((*MockinterviewsApi)(nil).FindByCandidate), ctx, candidate)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByUser", reflect.TypeOf((*MockinterviewsApi)(nil).FindByUser), ctx, user)
 }
 
 // GetReadyAt mocks base method.
@@ -942,20 +942,6 @@ func NewMockusersApi(ctrl *gomock.Controller) *MockusersApi {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockusersApi) EXPECT() *MockusersApiMockRecorder {
 	return m.recorder
-}
-
-// Add mocks base method.
-func (m *MockusersApi) Add(ctx context.Context, user *users.User) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", ctx, user)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Add indicates an expected call of Add.
-func (mr *MockusersApiMockRecorder) Add(ctx, user any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockusersApi)(nil).Add), ctx, user)
 }
 
 // Assign mocks base method.
@@ -1015,6 +1001,20 @@ func (m *MockusersApi) Match(ctx context.Context, targetInterval [2]int64) ([]us
 func (mr *MockusersApiMockRecorder) Match(ctx, targetInterval any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Match", reflect.TypeOf((*MockusersApi)(nil).Match), ctx, targetInterval)
+}
+
+// Upsert mocks base method.
+func (m *MockusersApi) Upsert(ctx context.Context, user users.UserDiff) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, user)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockusersApiMockRecorder) Upsert(ctx, user any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockusersApi)(nil).Upsert), ctx, user)
 }
 
 // MockloggerImpl is a mock of loggerImpl interface.

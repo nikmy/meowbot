@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -65,14 +66,20 @@ type mongoRepo[T any] struct {
 	log  logger.Logger
 }
 
-func (r *mongoRepo[T]) Create(ctx context.Context, data T) (string, error) {
-	result, err := r.coll.InsertOne(ctx, data)
-	if err != nil {
-		return "", errors.WrapFail(err, "insert data")
-	}
+func (r *mongoRepo[T]) Insert(ctx context.Context, data T) (string, error) {
+	var id string
 
-	id, err := r.makeID(result.InsertedID)
-	return id, errors.WrapFail(err, "make object id")
+	_, err := r.Txn(ctx, func() error {
+		result, err := r.coll.InsertOne(ctx, data)
+		if err != nil {
+			return errors.WrapFail(err, "insert data")
+		}
+
+		id, err = r.makeID(result.InsertedID)
+		return errors.WrapFail(err, "make object id")
+	})
+
+	return id, err
 }
 
 func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, error) {
@@ -112,29 +119,47 @@ func (r *mongoRepo[T]) Select(ctx context.Context, filters ...Filter) ([]T, erro
 	return selected, errors.Join(errs...)
 }
 
-func (r *mongoRepo[T]) Update(ctx context.Context, update func(T) T, filters ...Filter) error {
+func (r *mongoRepo[T]) Update(ctx context.Context, update func(*T), filters ...Filter) error {
 	mongoFilter, err := r.mongoFilter(r.applyFilters(filters...))
 	if err != nil {
 		return errors.WrapFail(err, "make mongo filter")
 	}
 
-	result := r.coll.FindOne(ctx, mongoFilter)
-	if err := result.Err(); err != nil {
-		return errors.WrapFail(err, "find document to update")
-	}
+	_, err = r.Txn(ctx, func() error {
+		result := r.coll.FindOne(ctx, mongoFilter)
 
-	var data T
-	err = result.Decode(&data)
-	if err != nil {
-		return errors.WrapFail(err, "decode data")
-	}
+		err := result.Err()
+		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			return errors.WrapFail(err, "find document to update")
+		}
 
-	data = update(data)
-	opts := &options.UpdateOptions{Upsert: new(bool)}
-	*opts.Upsert = true
+		var data T
+		if err == nil {
+			err = result.Decode(&data)
+			if err != nil {
+				return errors.WrapFail(err, "decode data")
+			}
+		}
 
-	_, err = r.coll.UpdateOne(ctx, mongoFilter, data, opts)
-	return errors.WrapFail(err, "do upsert")
+		update(&data)
+		opts := &options.UpdateOptions{Upsert: new(bool)}
+		*opts.Upsert = true
+
+		var req bson.M
+		raw, err := json.Marshal(data)
+		if err != nil {
+			return errors.WrapFail(err, "marshal data")
+		}
+		err = json.Unmarshal(raw, &req)
+		if err != nil {
+			return errors.WrapFail(err, "unmarshal data to bson.M")
+		}
+		req = bson.M{"$set": req}
+
+		_, err = r.coll.UpdateOne(ctx, mongoFilter, req, opts)
+		return errors.WrapFail(err, "do upsert")
+	})
+	return errors.WrapFail(err, "perform update transaction")
 }
 
 func (r *mongoRepo[T]) Delete(ctx context.Context, id string) (bool, error) {
@@ -152,10 +177,10 @@ func (r *mongoRepo[T]) Close(ctx context.Context) error {
 	return errors.WrapFail(err, "close mongo db connection")
 }
 
-func (r *mongoRepo[T]) makeID(iid any) (string, error) {
-	objID, ok := iid.(primitive.ObjectID)
+func (r *mongoRepo[T]) makeID(id any) (string, error) {
+	objID, ok := id.(primitive.ObjectID)
 	if !ok {
-		return "", errors.Error("bad id type")
+		return "", errors.Error("bad id (%v) type", id)
 	}
 
 	b := ([12]byte)(objID)
@@ -196,12 +221,13 @@ func (r *mongoRepo[T]) oidFilter(id string) (bson.M, error) {
 	return bson.M{"_id": primitive.ObjectID(objectID)}, nil
 }
 
-func (r *mongoRepo[T]) Txn(ctx context.Context, do func() error) error {
+func (r *mongoRepo[T]) Txn(ctx context.Context, do func() error) (bool, error) {
 	session, err := r.coll.Database().Client().StartSession()
 	if err != nil {
-		return errors.WrapFail(err, "start mongo session")
+		return false, errors.WrapFail(err, "start mongo session")
 	}
 
+	ok := false
 	err = mongo.WithSession(ctx, session, func(sc mongo.SessionContext) error {
 		err := session.StartTransaction()
 		if err != nil {
@@ -210,14 +236,15 @@ func (r *mongoRepo[T]) Txn(ctx context.Context, do func() error) error {
 
 		err = do()
 		if err != nil {
-			r.log.Infof("aborting txn because: %s", err.Error())
+			r.log.Errorf("aborting txn because: %s", err.Error())
 			err = session.AbortTransaction(sc)
 			return errors.WrapFail(err, "abort transaction")
 		}
 
 		err = session.CommitTransaction(sc)
+		ok = err == nil
 		return errors.WrapFail(err, "commit transaction")
 	})
 
-	return errors.WrapFail(err, "perform mongo transaction")
+	return ok, errors.WrapFail(err, "perform mongo transaction")
 }

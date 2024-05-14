@@ -3,6 +3,8 @@ package interviews
 import "context"
 
 type API interface {
+	Txn(ctx context.Context, do func() error) (bool, error)
+
 	// Create is API method for registering an interview. Data may contain confidential information.
 	Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error)
 
@@ -13,7 +15,7 @@ type API interface {
 	// Find checks whether an interview has been created or not
 	Find(ctx context.Context, id string) (*Interview, error)
 
-	FindByCandidate(ctx context.Context, candidate string) ([]Interview, error)
+	FindByUser(ctx context.Context, user string) ([]Interview, error)
 
 	// GetReadyAt returns list of interviews that have started and not finished at the given timestamp.
 	GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error)
@@ -29,14 +31,14 @@ type API interface {
 }
 
 type Interview struct {
-	ID            string `json:"id"          bson:"-"`
+	ID            string `json:"id"          bson:"_id,omitempty"`
 	InterviewerTg string `json:"interviewer" bson:"interviewer"`
 	CandidateTg   string `json:"candidate"   bson:"candidate"`
 
-	Vacancy string `json:"info" bson:"info"`
+	Vacancy string `json:"vacancy"     bson:"vacancy"`
 	Data    []byte `json:"data"        bson:"data"`
 
-	Interval [2]int64        `json:"intervals" bson:"intervals"`
+	Interval [2]int64        `json:"interval" bson:"interval"`
 	Status   InterviewStatus `json:"status"    bson:"status"`
 
 	CancelledBy Role `json:"cancelled_by" bson:"cancelled_by"`

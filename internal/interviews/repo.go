@@ -2,6 +2,8 @@ package interviews
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
@@ -20,20 +22,23 @@ type repoAPI struct {
 	repo repo.Repo[Interview]
 }
 
+func (r *repoAPI) Txn(ctx context.Context, do func() error) (bool, error) {
+	return r.repo.Txn(ctx, do)
+}
+
 func (r *repoAPI) Schedule(ctx context.Context, id string, interviewer string, slot [2]int64) error {
 	return r.repo.Update(
 		ctx,
-		func(i Interview) Interview {
+		func(i *Interview) {
 			i.InterviewerTg = interviewer
 			i.Interval = slot
-			return i
 		},
 		repo.ByID(id),
 	)
 }
 
 func (r *repoAPI) Create(ctx context.Context, vacancy string, candidateTg string) (string, error) {
-	return r.repo.Create(ctx, Interview{
+	return r.repo.Insert(ctx, Interview{
 		CandidateTg: candidateTg,
 		Vacancy:     vacancy,
 		Status:      StatusNew,
@@ -54,8 +59,25 @@ func (r *repoAPI) Find(ctx context.Context, id string) (*Interview, error) {
 	return &i, err
 }
 
-func (r *repoAPI) FindByCandidate(ctx context.Context, candidate string) ([]Interview, error) {
-	return r.repo.Select(ctx, repo.ByField("candidate", candidate))
+func (r *repoAPI) FindByUser(ctx context.Context, user string) ([]Interview, error) {
+	cand, err := r.repo.Select(ctx, repo.ByField("candidate", user))
+	if err != nil {
+		return nil, err
+	}
+
+	inter, err := r.repo.Select(ctx, repo.ByField("interviewer", user))
+	if err != nil {
+		return nil, err
+	}
+
+	var oidBuf [12]byte
+
+	all := append(cand, inter...)
+	for i := range all {
+		_, _ = hex.Decode(oidBuf[:], []byte(all[i].ID))
+		all[i].ID = base64.StdEncoding.EncodeToString(oidBuf[:])
+	}
+	return all, nil
 }
 
 func (r *repoAPI) GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error) {
@@ -65,17 +87,17 @@ func (r *repoAPI) GetReadyAt(ctx context.Context, at int64) (interviews []Interv
 }
 
 func (r *repoAPI) Cancel(ctx context.Context, id string, side Role) (err error) {
-	return r.repo.Update(ctx, func(i Interview) Interview {
+	return r.repo.Update(ctx, func(i *Interview) {
 		i.Status = StatusCancelled
+		i.Interval = [2]int64{}
 		i.CancelledBy = side
-		return i
+		i.InterviewerTg = ""
 	}, repo.ByID(id))
 }
 
 func (r *repoAPI) Done(ctx context.Context, id string) (err error) {
-	return r.repo.Update(ctx, func(i Interview) Interview {
+	return r.repo.Update(ctx, func(i *Interview) {
 		i.Status = StatusFinished
-		return i
 	}, repo.ByID(id))
 }
 

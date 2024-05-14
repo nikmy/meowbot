@@ -29,9 +29,9 @@ func New(env environment.Env) (Logger, error) {
 
 	switch env {
 	case environment.Production:
-		logger, err = zap.NewProduction()
+		logger, err = zap.NewProduction(zap.AddCallerSkip(1))
 	default:
-		logger, err = zap.NewDevelopment()
+		logger, err = zap.NewDevelopment(zap.AddCallerSkip(1))
 	}
 
 	if err != nil {
@@ -50,35 +50,35 @@ func (w *wrapper) With(label string) Logger {
 }
 
 func (w *wrapper) Debug(err error) {
-	if !w.base.Desugar().Core().Enabled(zap.DebugLevel) {
+	if err == nil || !w.base.Desugar().Core().Enabled(zap.DebugLevel) {
 		return
 	}
 	w.base.Debugf("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Info(err error) {
-	if !w.base.Desugar().Core().Enabled(zap.InfoLevel) {
+	if err == nil || !w.base.Desugar().Core().Enabled(zap.InfoLevel) {
 		return
 	}
 	w.base.Infof("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Warn(err error) {
-	if !w.base.Desugar().Core().Enabled(zap.WarnLevel) {
+	if err == nil || !w.base.Desugar().Core().Enabled(zap.WarnLevel) {
 		return
 	}
 	w.base.Warnf("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Error(err error) {
-	if !w.base.Desugar().Core().Enabled(zap.ErrorLevel) {
+	if err == nil || !w.base.Desugar().Core().Enabled(zap.ErrorLevel) {
 		return
 	}
 	w.base.Errorf("%s", err)
 	_ = w.base.Sync()
 }
 func (w *wrapper) Panic(err error) {
-	if !w.base.Desugar().Core().Enabled(zap.PanicLevel) {
+	if err == nil || !w.base.Desugar().Core().Enabled(zap.PanicLevel) {
 		return
 	}
 	w.base.Panicf("%s", err)

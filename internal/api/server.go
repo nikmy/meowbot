@@ -96,7 +96,7 @@ func (s *server) handleNew(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "bad json")
 	}
 
-	id, err := s.repo.Create(c.Context(), data)
+	id, err := s.repo.Insert(c.Context(), data)
 	if err != nil {
 		return errors.WrapFail(err, "create reminder")
 	}
