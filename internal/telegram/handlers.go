@@ -21,7 +21,8 @@ const (
 	matchReadIIDState      fsm.State = "enterIdForMatch"
 	matchReadIntervalState fsm.State = "chooseInterval"
 
-	createReadCTgState fsm.State = "enterCandTg"
+	createReadInfoState fsm.State = "crReadInfo"
+	createReadCTgState fsm.State = "crReadTg"
 
 	deleteReadIIDState fsm.State = "delReadIID"
 
@@ -50,9 +51,10 @@ func (b *Bot) setupHandlers() {
 
 	manager.Bind("/match", initialState, b.startMatch)
 	manager.Bind(telebot.OnText, matchReadIIDState, b.matchReadIID)
-	manager.Bind(telebot.OnText, matchReadIntervalState, b.matchReadInterval)
+	manager.Bind(telebot.OnText, matchReadIntervalState, b.match)
 
 	manager.Bind("/create", initialState, b.startCreate)
+	manager.Bind(telebot.OnText, createReadInfoState, b.createReadInfo)
 	manager.Bind(telebot.OnText, createReadCTgState, b.createReadCandidate)
 
 	manager.Bind("/delete", initialState, b.startDelete)
@@ -101,7 +103,12 @@ func (b *Bot) matchReadIID(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Такого собеседования нет")
 	}
 
-	if i.CandidateTg != c.Sender().Username {
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	if i.CandidateTg != sender.Username {
 		return b.final(c, s, "Вы не являетесь кандидатом в этом собеседовании")
 	}
 
@@ -114,7 +121,7 @@ func (b *Bot) matchReadIID(c telebot.Context, s fsm.Context) error {
 	return c.Send("Введите дату и время в формате ДД ММ ГГГГ ЧЧ ММ:")
 }
 
-func (b *Bot) matchReadInterval(c telebot.Context, s fsm.Context) error {
+func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	var iid string
 	err := s.Get("iid", &iid)
 	if err != nil {
@@ -141,8 +148,13 @@ func (b *Bot) matchReadInterval(c telebot.Context, s fsm.Context) error {
 		TimeSlot: interval,
 	}
 
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
 	for len(free) > 0 {
-		assigned, err := b.users.Assign(b.ctx, c.Sender().Username, free[0].Username, interview, func() error {
+		assigned, err := b.users.Assign(b.ctx, sender.Username, free[0].Username, interview, func() error {
 			return b.interviews.Schedule(b.ctx, iid, free[0].Username, interval)
 		})
 		if err != nil {
@@ -173,8 +185,12 @@ var interviewListTmpl = template.Must(
 )
 
 func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
-	username := "@" + c.Sender().Username
-	user, err := b.users.Get(b.ctx, username)
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	user, err := b.users.Get(b.ctx, sender.Username)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "get user"))
 	}
@@ -183,9 +199,13 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "У вас нет назначенных собеседований")
 	}
 
-	asCandidate, err := b.interviews.FindByCandidate(b.ctx, username)
+	asCandidate, err := b.interviews.FindByCandidate(b.ctx, sender.Username)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "find by candidate"))
+	}
+
+	if len(asCandidate) == 0 && len(user.Assigned) == 0 {
+		return b.final(c, s, "У вас нет назначенных собеседований")
 	}
 
 	var formatted [2][]string
@@ -218,15 +238,34 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 }
 
 func (b *Bot) startCreate(c telebot.Context, s fsm.Context) error {
+	b.setState(s, createReadInfoState)
+	return c.Send("Введите название вакансии")
+}
+
+func (b *Bot) createReadInfo(c telebot.Context, s fsm.Context) error {
+	vac := c.Text()
+
+	err := s.Update("vac", vac)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "update state with vac"))
+	}
+
 	b.setState(s, createReadCTgState)
 	return c.Send("Введите telegram кандидата")
 }
 
 func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
+	var vac string
+	err := s.Get("vac", &vac)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "get vacancy from state"))
+	}
+
 	tg := c.Text()
 	if len(tg) < 2 || tg[0] != '@' {
 		return b.final(c, s, "Некорректный telegram")
 	}
+	tg = tg[1:]
 
 	u, err := b.users.Get(b.ctx, tg)
 	if err == nil && u == nil {
@@ -239,7 +278,7 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, err)
 	}
 
-	id, err := b.interviews.Create(b.ctx, nil, tg)
+	id, err := b.interviews.Create(b.ctx, vac, tg)
 	if err != nil {
 		b.logger.Error(err)
 		return b.fail(c, s, errors.WrapFail(err, "create interview"))
@@ -289,8 +328,13 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Собеседование не найдено")
 	}
 
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
 	side := interviews.RoleInterviewer
-	if i.CandidateTg[1:] == c.Sender().Username {
+	if i.CandidateTg[1:] == sender.Username {
 		side = interviews.RoleCandidate
 	}
 

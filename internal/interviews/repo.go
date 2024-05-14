@@ -32,11 +32,11 @@ func (r *repoAPI) Schedule(ctx context.Context, id string, interviewer string, s
 	)
 }
 
-func (r *repoAPI) Create(ctx context.Context, data []byte, candidateTg string) (string, error) {
+func (r *repoAPI) Create(ctx context.Context, vacancy string, candidateTg string) (string, error) {
 	return r.repo.Create(ctx, Interview{
-		CandidateTg:   candidateTg,
-		Data:          data,
-		Status:        StatusNew,
+		CandidateTg: candidateTg,
+		Vacancy:     vacancy,
+		Status:      StatusNew,
 	})
 }
 

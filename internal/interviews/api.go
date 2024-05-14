@@ -4,7 +4,7 @@ import "context"
 
 type API interface {
 	// Create is API method for registering an interview. Data may contain confidential information.
-	Create(ctx context.Context, data []byte, candidateTg string) (id string, err error)
+	Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error)
 
 	Delete(ctx context.Context, id string) (found bool, err error)
 
@@ -32,7 +32,9 @@ type Interview struct {
 	ID            string `json:"id"          bson:"-"`
 	InterviewerTg string `json:"interviewer" bson:"interviewer"`
 	CandidateTg   string `json:"candidate"   bson:"candidate"`
-	Data          []byte `json:"data"        bson:"data"`
+
+	Vacancy string `json:"info" bson:"info"`
+	Data    []byte `json:"data"        bson:"data"`
 
 	Interval [2]int64        `json:"intervals" bson:"intervals"`
 	Status   InterviewStatus `json:"status"    bson:"status"`

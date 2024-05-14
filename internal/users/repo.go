@@ -3,13 +3,10 @@ package users
 import (
 	"context"
 	"github.com/nikmy/meowbot/internal/interviews"
-	"github.com/nikmy/meowbot/pkg/logger"
-	"slices"
-	"sort"
-	"time"
-
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
+	"github.com/nikmy/meowbot/pkg/logger"
+	"slices"
 )
 
 type User struct {
@@ -35,7 +32,7 @@ func getIntervals(interviews []Interview) [][2]int64 {
 type Role = interviews.Role
 
 func (u User) Recipient() string {
-	return u.Username
+	return "@" + u.Username
 }
 
 func New(ctx context.Context, log logger.Logger, cfg repo.Config, src repo.DataSource) (API, error) {
@@ -73,14 +70,13 @@ func (r *repoAPI) Get(ctx context.Context, username string) (*User, error) {
 	return &users[0], nil
 }
 
-var minLen = time.Hour.Milliseconds() // TODO: config
-
 func (r *repoAPI) Match(ctx context.Context, targetInterval [2]int64) ([]User, error) {
 	return r.repo.Select(
 		ctx,
 		repo.ByField("employee", true),
 		repo.Where(func(u User) bool {
-			return !intersect(getIntervals(u.Assigned), targetInterval, minLen)
+			_, canInsert := addInterval(getIntervals(u.Assigned), targetInterval)
+			return canInsert
 		}),
 	)
 }
@@ -188,49 +184,4 @@ func (r *repoAPI) Free(
 	//})
 	//
 	//return errors.WrapFail(err, "free interval for user")
-}
-
-func addInterval(intervals [][2]int64, t [2]int64) (int, bool) {
-	idx := sort.Search(len(intervals), func(i int) bool {
-		return intervals[i][0] >= t[0]
-	})
-
-	return idx, idx == len(intervals) || intervals[idx][0] >= t[1]
-}
-
-func intersect(intervals [][2]int64, t [2]int64, minIntersection int64) bool {
-	for _, i := range intervals {
-		// | | [ ]
-		if i[1] <= t[0] {
-			continue
-		}
-
-		// | | [ ]
-		if t[1] <= i[0] {
-			continue
-		}
-
-		// [ | ...
-		if t[0] <= i[0] {
-			// [ | <-> ] |
-			if t[1] <= i[1] {
-				return t[1]-i[0] >= minIntersection
-			}
-
-			// [ | <-> | ]
-			return i[1]-i[0] >= minIntersection
-		}
-
-		// | [ ...
-
-		// | [ ] |
-		if t[1] <= i[1] {
-			return true
-		}
-
-		// | [ <-> | ]
-		return i[1]-t[0] >= minIntersection
-	}
-
-	return false
 }
