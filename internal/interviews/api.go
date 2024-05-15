@@ -1,16 +1,20 @@
 package interviews
 
-import "context"
+import (
+	"context"
+)
 
 type API interface {
 	Txn(ctx context.Context, do func() error) (bool, error)
 
 	// Create is API method for registering an interview. Data may contain confidential information.
-	Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error)
+	Create(ctx context.Context, vacancy string, candidateTg int64) (id string, err error)
 
 	Delete(ctx context.Context, id string) (found bool, err error)
 
-	Schedule(ctx context.Context, id string, interviewer string, timeSlot [2]int64) error
+	Schedule(ctx context.Context, id string, interviewerTg int64, timeSlot [2]int64) error
+
+	Notify(ctx context.Context, id string, at int64, notified []Role) error
 
 	// Find checks whether an interview has been created or not
 	Find(ctx context.Context, id string) (*Interview, error)
@@ -32,8 +36,8 @@ type API interface {
 
 type Interview struct {
 	ID            string `json:"id"          bson:"_id,omitempty"`
-	InterviewerTg string `json:"interviewer" bson:"interviewer"`
-	CandidateTg   string `json:"candidate"   bson:"candidate"`
+	InterviewerTg int64  `json:"interviewer" bson:"interviewer"`
+	CandidateTg   int64  `json:"candidate"   bson:"candidate"`
 
 	Vacancy string `json:"vacancy"     bson:"vacancy"`
 	Data    []byte `json:"data"        bson:"data"`
@@ -42,6 +46,11 @@ type Interview struct {
 	Status   InterviewStatus `json:"status"    bson:"status"`
 
 	CancelledBy Role `json:"cancelled_by" bson:"cancelled_by"`
+
+	LastNotification struct {
+		UnixTime int64   `json:"unix_time" bson:"unix_time"`
+		Notified [2]bool `json:"notified" bson:"notified"`
+	} `json:"last_notifications" bson:"last_notifications"`
 }
 
 type InterviewStatus int

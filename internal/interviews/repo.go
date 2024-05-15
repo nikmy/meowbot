@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
@@ -26,7 +27,7 @@ func (r *repoAPI) Txn(ctx context.Context, do func() error) (bool, error) {
 	return r.repo.Txn(ctx, do)
 }
 
-func (r *repoAPI) Schedule(ctx context.Context, id string, interviewer string, slot [2]int64) error {
+func (r *repoAPI) Schedule(ctx context.Context, id string, interviewer int64, slot [2]int64) error {
 	return r.repo.Update(
 		ctx,
 		func(i *Interview) {
@@ -37,7 +38,7 @@ func (r *repoAPI) Schedule(ctx context.Context, id string, interviewer string, s
 	)
 }
 
-func (r *repoAPI) Create(ctx context.Context, vacancy string, candidateTg string) (string, error) {
+func (r *repoAPI) Create(ctx context.Context, vacancy string, candidateTg int64) (string, error) {
 	return r.repo.Insert(ctx, Interview{
 		CandidateTg: candidateTg,
 		Vacancy:     vacancy,
@@ -81,9 +82,11 @@ func (r *repoAPI) FindByUser(ctx context.Context, user string) ([]Interview, err
 }
 
 func (r *repoAPI) GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error) {
-	return r.repo.Select(ctx, repo.Where(func(i Interview) bool {
-		return i.Status == StatusScheduled && i.Interval[0] <= at && i.Interval[1] >= at
-	}))
+	return r.repo.Select(
+		ctx,
+		repo.ByField("status", StatusCancelled),
+		repo.Where(func(i Interview) bool { return i.Interval[0] >= at }),
+	)
 }
 
 func (r *repoAPI) Cancel(ctx context.Context, id string, side Role) (err error) {
@@ -91,7 +94,7 @@ func (r *repoAPI) Cancel(ctx context.Context, id string, side Role) (err error) 
 		i.Status = StatusCancelled
 		i.Interval = [2]int64{}
 		i.CancelledBy = side
-		i.InterviewerTg = ""
+		i.InterviewerTg = 0
 	}, repo.ByID(id))
 }
 
@@ -103,4 +106,16 @@ func (r *repoAPI) Done(ctx context.Context, id string) (err error) {
 
 func (r *repoAPI) Close(ctx context.Context) error {
 	return r.repo.Close(ctx)
+}
+
+func (r *repoAPI) Notify(ctx context.Context, id string, at int64, notified []Role) error {
+	return r.repo.Update(ctx,
+		func(i *Interview) {
+			i.LastNotification.UnixTime = at
+			for _, role := range notified {
+				i.LastNotification.Notified[role] = true
+			}
+		},
+		repo.ByID(id),
+	)
 }

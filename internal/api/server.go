@@ -119,12 +119,11 @@ func (s *server) handleUpdate(c *fiber.Ctx) error {
 		return s.sendError(c, http.StatusBadRequest, "bad patch format")
 	}
 
-	err = s.repo.Update(c.Context(), func(old interviews.Interview) interviews.Interview {
+	err = s.repo.Update(c.Context(), func(i *interviews.Interview) {
 		if len(patch.Data) > 0 {
-			old.Data = patch.Data
+			i.Data = patch.Data
 		}
-		old.CandidateTg = cmp.Or(patch.CandidateTg, old.CandidateTg)
-		return old
+		i.CandidateTg = cmp.Or(patch.CandidateTg, i.CandidateTg)
 	}, repo.ByID(id))
 	if err != nil {
 		return errors.WrapFail(err, "update interview")

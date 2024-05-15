@@ -92,7 +92,7 @@ func TestBot_showInterviews(t *testing.T) {
 
 			b := &Bot{
 				interviews: iMock,
-				logger:     log,
+				log:        log,
 			}
 
 			err := b.showInterviews(cMock, sMock)

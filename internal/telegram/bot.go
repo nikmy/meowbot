@@ -1,9 +1,11 @@
 package telegram
 
 import (
+	"cmp"
 	"context"
-	"github.com/nikmy/meowbot/internal/repo"
-	"github.com/nikmy/meowbot/pkg/errors"
+	"slices"
+	"time"
+
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/interviews"
@@ -14,9 +16,8 @@ import (
 func New(
 	logger logger.Logger,
 	conf Config,
-	dbConf repo.Config,
-	interviewsSrc repo.DataSource,
-	usersSrc repo.DataSource,
+	interviews interviews.API,
+	users users.API,
 ) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   conf.Token,
@@ -25,46 +26,50 @@ func New(
 			Timeout: conf.PollInterval,
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	notifyBefore := make([]int64, len(conf.NotifyBefore))
+	for i := range conf.NotifyBefore {
+		notifyBefore[i] = conf.NotifyBefore[i].Milliseconds()
+	}
+
+	slices.SortFunc(notifyBefore, cmp.Compare[int64])
+
 	return &Bot{
-		bot:           b,
-		logger:        logger,
-		dbConf:        dbConf,
-		usersSrc:      usersSrc,
-		interviewsSrc: interviewsSrc,
+		bot:        b,
+		log:        logger,
+		users:      users,
+		interviews: interviews,
+
+		notifyBefore: notifyBefore,
+		notifyPeriod: conf.NotifyPeriod,
 	}, err
 }
 
 type Bot struct {
 	bot *telebot.Bot
+
 	ctx context.Context
+	log logger.Logger
 
-	dbConf repo.Config
+	users      users.API
+	interviews interviews.API
 
-	usersSrc repo.DataSource
-	users    users.API
-
-	interviewsSrc repo.DataSource
-	interviews    interviews.API
-
-	logger logger.Logger
+	notifyBefore []int64
+	notifyPeriod time.Duration
 }
 
 func (b *Bot) Run(ctx context.Context) error {
-	ivRepo, err := interviews.New(ctx, b.logger, b.dbConf, b.interviewsSrc)
-	if err != nil {
-		return errors.WrapFail(err, "init interviews repo")
-	}
-	b.interviews = ivRepo
-
-	uRepo, err := users.New(ctx, b.logger, b.dbConf, b.usersSrc)
-	if err != nil {
-		return errors.WrapFail(err, "init users repo")
-	}
-	b.users = uRepo
-
 	b.ctx = ctx
 	b.setupHandlers()
 	go b.bot.Start()
+
+	if b.notifyPeriod > 0 && len(b.notifyBefore) > 0 {
+		go b.watch()
+	}
+
 	return nil
 }
 

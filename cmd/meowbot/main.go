@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"github.com/nikmy/meowbot/internal/interviews"
+	"github.com/nikmy/meowbot/internal/users"
 	stdlog "log"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/nikmy/meowbot/internal/telegram"
 	"github.com/nikmy/meowbot/pkg/errors"
@@ -22,14 +25,25 @@ func main() {
 		log.Panic(errors.WrapFail(err, "init logger"))
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGABRT)
+	defer cancel()
+
 	db := cfg.Database
-	bot, err := telegram.New(log, cfg.Telegram, db.Storage, db.Sources.Interviews, db.Sources.Users)
+
+	interviewsRepo, err := interviews.New(ctx, log, db.Storage, db.Sources.Interviews)
+	if err != nil {
+		log.Panic(errors.WrapFail(err, "init interviews repo"))
+	}
+
+	usersRepo, err := users.New(ctx, log, db.Storage, db.Sources.Users)
+	if err != nil {
+		log.Panic(errors.WrapFail(err, "init users repo"))
+	}
+
+	bot, err := telegram.New(log, cfg.Telegram, interviewsRepo, usersRepo)
 	if err != nil {
 		log.Panic(errors.WrapFail(err, "initialize bot service"))
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
 
 	stopped := make(chan struct{})
 	context.AfterFunc(ctx, func() {

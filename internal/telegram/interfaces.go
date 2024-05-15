@@ -27,3 +27,8 @@ type usersApi interface {
 type loggerImpl interface {
 	logger.Logger
 }
+
+type pubsub interface {
+	Pull(channel string) ([][]byte, error)
+}
+

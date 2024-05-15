@@ -2,41 +2,18 @@ package users
 
 import (
 	"context"
+	"slices"
+
 	"github.com/nikmy/meowbot/internal/interviews"
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
-	"slices"
 )
 
-type User struct {
-	Assigned []Interview `json:"assigned" bson:"assigned"`
-	Username string      `json:"username" bson:"username"`
-	Employee bool        `json:"employee" bson:"employee"`
-}
-
 type UserDiff struct {
+	Telegram *int64
 	Username *string
 	Employee *bool
-}
-
-type Interview struct {
-	Role     Role     `json:"role"      bson:"role"`
-	TimeSlot [2]int64 `json:"time_slot" bson:"time_slot"`
-}
-
-func getIntervals(interviews []Interview) [][2]int64 {
-	intervals := make([][2]int64, 0, len(interviews))
-	for _, i := range interviews {
-		intervals = append(intervals, i.TimeSlot)
-	}
-	return intervals
-}
-
-type Role = interviews.Role
-
-func (u User) Recipient() string {
-	return u.Username
 }
 
 func New(ctx context.Context, log logger.Logger, cfg repo.Config, src repo.DataSource) (API, error) {
@@ -52,18 +29,21 @@ type repoAPI struct {
 	repo repo.Repo[User]
 }
 
-func (r *repoAPI) Upsert(ctx context.Context, user UserDiff) error {
+func (r *repoAPI) Upsert(ctx context.Context, username string, diff UserDiff) error {
 	return r.repo.Update(
 		ctx,
 		func(u *User) {
-			if user.Employee != nil {
-				u.Employee = *user.Employee
+			if diff.Employee != nil {
+				u.Employee = *diff.Employee
 			}
-			if user.Username != nil {
-				u.Username = *user.Username
+			if diff.Username != nil {
+				u.Username = *diff.Username
+			}
+			if diff.Telegram != nil {
+				u.Telegram = *diff.Telegram
 			}
 		},
-		repo.ByField("username", user.Username),
+		repo.ByField("username", username),
 	)
 }
 
