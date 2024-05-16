@@ -1,9 +1,7 @@
 package telegram
 
 import (
-	"cmp"
 	"context"
-	"slices"
 	"time"
 
 	"gopkg.in/telebot.v3"
@@ -15,37 +13,31 @@ import (
 
 func New(
 	logger logger.Logger,
-	conf Config,
+	cfg Config,
 	interviews interviews.API,
 	users users.API,
 ) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
-		Token:   conf.Token,
+		Token:   cfg.Token,
 		Updates: 256,
 		Poller: &telebot.LongPoller{
-			Timeout: conf.PollInterval,
+			Timeout: cfg.PollInterval,
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	notifyBefore := make([]int64, len(conf.NotifyBefore))
-	for i := range conf.NotifyBefore {
-		notifyBefore[i] = conf.NotifyBefore[i].Milliseconds()
-	}
-
-	slices.SortFunc(notifyBefore, cmp.Compare[int64])
-
-	return &Bot{
+	bot := &Bot{
 		bot:        b,
 		log:        logger,
 		users:      users,
 		interviews: interviews,
+	}
 
-		notifyBefore: notifyBefore,
-		notifyPeriod: conf.NotifyPeriod,
-	}, err
+	bot.applyNotifications(cfg)
+
+	return bot, nil
 }
 
 type Bot struct {
@@ -65,11 +57,7 @@ func (b *Bot) Run(ctx context.Context) error {
 	b.ctx = ctx
 	b.setupHandlers()
 	go b.bot.Start()
-
-	if b.notifyPeriod > 0 && len(b.notifyBefore) > 0 {
-		go b.watch()
-	}
-
+	b.runNotifier()
 	return nil
 }
 

@@ -47,10 +47,12 @@ type Interview struct {
 
 	CancelledBy Role `json:"cancelled_by" bson:"cancelled_by"`
 
-	LastNotification struct {
-		UnixTime int64   `json:"unix_time" bson:"unix_time"`
-		Notified [2]bool `json:"notified" bson:"notified"`
-	} `json:"last_notifications" bson:"last_notifications"`
+	LastNotification *NotificationLog `json:"last_notifications" bson:"last_notifications"`
+}
+
+type NotificationLog struct {
+	UnixTime int64   `json:"unix_time" bson:"unix_time"`
+	Notified [2]bool `json:"notified" bson:"notified"`
 }
 
 type InterviewStatus int

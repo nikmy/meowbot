@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"time"
@@ -11,6 +12,23 @@ import (
 	"github.com/nikmy/meowbot/internal/users"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
+
+func (b *Bot) applyNotifications(cfg Config) {
+	notifyBefore := make([]int64, len(cfg.NotifyBefore))
+	for i := range cfg.NotifyBefore {
+		notifyBefore[i] = cfg.NotifyBefore[i].Milliseconds()
+	}
+
+	slices.SortFunc(notifyBefore, cmp.Compare[int64])
+	b.notifyBefore = notifyBefore
+	b.notifyPeriod = cfg.NotifyPeriod
+}
+
+func (b *Bot) runNotifier() {
+	if b.notifyPeriod > 0 && len(b.notifyBefore) > 0 {
+		go b.watch()
+	}
+}
 
 func (b *Bot) notify(userID int64, msg string) error {
 	_, err := b.bot.Send(users.User{Telegram: userID}, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
@@ -26,7 +44,7 @@ func (b *Bot) watch() {
 		case <-b.ctx.Done():
 			return
 		case <-tick.C:
-			_, err := b.interviews.Txn(b.ctx, b.sendNeededNotifications)
+			err := b.sendNeededNotifications()
 			if err != nil {
 				b.log.Error(errors.WrapFail(err, "send needed notifications"))
 			}
@@ -56,6 +74,7 @@ func (b *Bot) sendNeededNotifications() error {
 	}
 
 	b.sendAllNotifications(needed)
+
 	return nil
 }
 
@@ -79,7 +98,7 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 
 			err := b.notify(tgID, msg)
 			if err != nil {
-				b.log.Error(errors.WrapFail(err, "notify interviewer"))
+				b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
 				continue
 			}
 
@@ -100,55 +119,59 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 func (b *Bot) getNeededNotifications(now int64, upcoming []interviews.Interview) []notification {
 	needed := make([]notification, 0, len(upcoming))
 
+	both := []interviews.Role{interviews.RoleInterviewer, interviews.RoleCandidate}
+
 	for _, i := range upcoming {
-		last := i.LastNotification
-		left := time.Duration(i.Interval[0]-now) * time.Millisecond
+		left := i.Interval[0] - now
 
-		lastNotifyInterval := i.Interval[0] - last.UnixTime
-		firstLarger, _ := slices.BinarySearch(b.notifyBefore, lastNotifyInterval)
-
-		if firstLarger > 0 {
-			proximity := lastNotifyInterval - b.notifyBefore[firstLarger-1]
-			if proximity < b.notifyPeriod.Milliseconds() {
+		// check if interview is almost started
+		if left < b.notifyPeriod.Milliseconds() {
+			if i.LastNotification == nil || i.LastNotification.UnixTime != i.Interval[0] {
 				needed = append(needed, notification{
 					Interview:  i,
-					NotifyTime: b.notifyBefore[firstLarger-1] - b.notifyPeriod.Milliseconds(),
-					LeftTime:   left,
+					Recipients: both,
+					NotifyTime: i.Interval[0],
+					LeftTime:   0,
 				})
 				continue
 			}
-		}
 
-		if firstLarger == len(b.notifyBefore) {
-			b.log.Debug(errors.Error("wrong case"))
 			continue
 		}
 
-		proximity := b.notifyBefore[firstLarger] - lastNotifyInterval
-		if proximity < b.notifyPeriod.Milliseconds() {
+		// find appropriate interval to notify
+		chosenNotify, _ := slices.BinarySearch(b.notifyBefore, left)
+
+		// too early to notify
+		if chosenNotify == len(b.notifyBefore) {
+			b.log.Warnf("early attempt to notify")
+			continue
+		}
+
+		last := i.LastNotification
+		chosenInt := b.notifyBefore[chosenNotify]
+
+		if last == nil || i.Interval[0]-last.UnixTime > chosenInt {
 			needed = append(needed, notification{
 				Interview:  i,
-				NotifyTime: b.notifyBefore[firstLarger] + b.notifyPeriod.Milliseconds(),
-				LeftTime:   left,
+				Recipients: both,
+				NotifyTime: i.Interval[0] - chosenInt,
+				LeftTime:   time.Duration(chosenInt) * time.Millisecond,
 			})
-		}
-
-		if last.Notified[interviews.RoleInterviewer] && last.Notified[interviews.RoleCandidate] {
 			continue
 		}
 
-		n := notification{
+		// check if last time both sides were notified
+		if last.Notified[interviews.RoleCandidate] {
+			continue
+		}
+
+		needed = append(needed, notification{
 			Interview:  i,
 			NotifyTime: last.UnixTime,
-			LeftTime:   left,
-		}
-		if !last.Notified[interviews.RoleInterviewer] {
-			n.Recipients = append(n.Recipients, interviews.RoleInterviewer)
-		}
-		if !last.Notified[interviews.RoleCandidate] {
-			n.Recipients = append(n.Recipients, interviews.RoleCandidate)
-		}
-		needed = append(needed, n)
+			Recipients: both[1:],
+			LeftTime:   time.Duration(i.Interval[0]-last.UnixTime) * time.Millisecond,
+		})
 	}
 
 	return needed

@@ -819,7 +819,7 @@ func (mr *MockinterviewsApiMockRecorder) Close(ctx any) *gomock.Call {
 }
 
 // Create mocks base method.
-func (m *MockinterviewsApi) Create(ctx context.Context, vacancy, candidateTg string) (string, error) {
+func (m *MockinterviewsApi) Create(ctx context.Context, vacancy string, candidateTg int64) (string, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, vacancy, candidateTg)
 	ret0, _ := ret[0].(string)
@@ -907,18 +907,47 @@ func (mr *MockinterviewsApiMockRecorder) GetReadyAt(ctx, at any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReadyAt", reflect.TypeOf((*MockinterviewsApi)(nil).GetReadyAt), ctx, at)
 }
 
-// Schedule mocks base method.
-func (m *MockinterviewsApi) Schedule(ctx context.Context, id, interviewer string, timeSlot [2]int64) error {
+// Notify mocks base method.
+func (m *MockinterviewsApi) Notify(ctx context.Context, id string, at int64, notified []interviews.Role) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Schedule", ctx, id, interviewer, timeSlot)
+	ret := m.ctrl.Call(m, "Notify", ctx, id, at, notified)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Notify indicates an expected call of Notify.
+func (mr *MockinterviewsApiMockRecorder) Notify(ctx, id, at, notified any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Notify", reflect.TypeOf((*MockinterviewsApi)(nil).Notify), ctx, id, at, notified)
+}
+
+// Schedule mocks base method.
+func (m *MockinterviewsApi) Schedule(ctx context.Context, id string, interviewerTg int64, timeSlot [2]int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Schedule", ctx, id, interviewerTg, timeSlot)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Schedule indicates an expected call of Schedule.
-func (mr *MockinterviewsApiMockRecorder) Schedule(ctx, id, interviewer, timeSlot any) *gomock.Call {
+func (mr *MockinterviewsApiMockRecorder) Schedule(ctx, id, interviewerTg, timeSlot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockinterviewsApi)(nil).Schedule), ctx, id, interviewer, timeSlot)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockinterviewsApi)(nil).Schedule), ctx, id, interviewerTg, timeSlot)
+}
+
+// Txn mocks base method.
+func (m *MockinterviewsApi) Txn(ctx context.Context, do func() error) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Txn", ctx, do)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Txn indicates an expected call of Txn.
+func (mr *MockinterviewsApiMockRecorder) Txn(ctx, do any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Txn", reflect.TypeOf((*MockinterviewsApi)(nil).Txn), ctx, do)
 }
 
 // MockusersApi is a mock of usersApi interface.
@@ -1004,17 +1033,17 @@ func (mr *MockusersApiMockRecorder) Match(ctx, targetInterval any) *gomock.Call 
 }
 
 // Upsert mocks base method.
-func (m *MockusersApi) Upsert(ctx context.Context, user users.UserDiff) error {
+func (m *MockusersApi) Upsert(ctx context.Context, username string, user users.UserDiff) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upsert", ctx, user)
+	ret := m.ctrl.Call(m, "Upsert", ctx, username, user)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upsert indicates an expected call of Upsert.
-func (mr *MockusersApiMockRecorder) Upsert(ctx, user any) *gomock.Call {
+func (mr *MockusersApiMockRecorder) Upsert(ctx, username, user any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockusersApi)(nil).Upsert), ctx, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockusersApi)(nil).Upsert), ctx, username, user)
 }
 
 // MockloggerImpl is a mock of loggerImpl interface.
@@ -1197,4 +1226,42 @@ func (m *MockloggerImpl) With(label string) logger.Logger {
 func (mr *MockloggerImplMockRecorder) With(label any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "With", reflect.TypeOf((*MockloggerImpl)(nil).With), label)
+}
+
+// Mockpubsub is a mock of pubsub interface.
+type Mockpubsub struct {
+	ctrl     *gomock.Controller
+	recorder *MockpubsubMockRecorder
+}
+
+// MockpubsubMockRecorder is the mock recorder for Mockpubsub.
+type MockpubsubMockRecorder struct {
+	mock *Mockpubsub
+}
+
+// NewMockpubsub creates a new mock instance.
+func NewMockpubsub(ctrl *gomock.Controller) *Mockpubsub {
+	mock := &Mockpubsub{ctrl: ctrl}
+	mock.recorder = &MockpubsubMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockpubsub) EXPECT() *MockpubsubMockRecorder {
+	return m.recorder
+}
+
+// Pull mocks base method.
+func (m *Mockpubsub) Pull(channel string) ([][]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Pull", channel)
+	ret0, _ := ret[0].([][]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Pull indicates an expected call of Pull.
+func (mr *MockpubsubMockRecorder) Pull(channel any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pull", reflect.TypeOf((*Mockpubsub)(nil).Pull), channel)
 }
