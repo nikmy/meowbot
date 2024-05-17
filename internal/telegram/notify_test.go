@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/nikmy/meowbot/internal/interviews"
+	"github.com/nikmy/meowbot/internal/repo/models"
 )
 
 func Test_getNeededNotifications(t *testing.T) {
@@ -18,7 +18,7 @@ func Test_getNeededNotifications(t *testing.T) {
 
 	type args struct {
 		now      int64
-		upcoming []interviews.Interview
+		upcoming []models.Interview
 	}
 
 	type testcase struct {
@@ -28,7 +28,7 @@ func Test_getNeededNotifications(t *testing.T) {
 		want   []notification
 	}
 
-	both := []interviews.Role{interviews.RoleInterviewer, interviews.RoleCandidate}
+	both := []models.Role{models.RoleInterviewer, models.RoleCandidate}
 
 	tests := [...]testcase{
 		{
@@ -39,7 +39,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now:      1000,
-				upcoming: []interviews.Interview{},
+				upcoming: []models.Interview{},
 			},
 			want: []notification{},
 		},
@@ -51,13 +51,13 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
-					{Interval: [2]int64{1020, 1100}},
+				upcoming: []models.Interview{
+					{Meet: &[2]int64{1020, 1100}},
 				},
 			},
 			want: []notification{
 				{
-					Interview:  interviews.Interview{Interval: [2]int64{1020, 1100}},
+					Interview:  models.Interview{Meet: &[2]int64{1020, 1100}},
 					Recipients: both,
 					NotifyTime: 920,
 					LeftTime:   100 * time.Millisecond,
@@ -72,8 +72,8 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
-					{Interval: [2]int64{1110, 1200}},
+				upcoming: []models.Interview{
+					{Meet: &[2]int64{1110, 1200}},
 				},
 			},
 			want: []notification{},
@@ -86,10 +86,10 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
+				upcoming: []models.Interview{
 					{
-						Interval: [2]int64{1050, 1100},
-						LastNotification: &interviews.NotificationLog{
+						Meet: &[2]int64{1050, 1100},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 950,
 							Notified: [2]bool{true, true},
 						},
@@ -106,10 +106,10 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
+				upcoming: []models.Interview{
 					{
-						Interval: [2]int64{1002, 1010},
-						LastNotification: &interviews.NotificationLog{
+						Meet: &[2]int64{1002, 1010},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 1002,
 							Notified: [2]bool{true, true},
 						},
@@ -126,10 +126,10 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
+				upcoming: []models.Interview{
 					{
-						Interval: [2]int64{1004, 1100},
-						LastNotification: &interviews.NotificationLog{
+						Meet: &[2]int64{1004, 1100},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 900,
 							Notified: [2]bool{true},
 						},
@@ -138,9 +138,9 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			want: []notification{
 				{
-					Interview: interviews.Interview{
-						Interval: [2]int64{1004, 1100},
-						LastNotification: &interviews.NotificationLog{
+					Interview: models.Interview{
+						Meet: &[2]int64{1004, 1100},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 900,
 							Notified: [2]bool{true},
 						},
@@ -159,10 +159,10 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
+				upcoming: []models.Interview{
 					{
-						Interval: [2]int64{1100, 1200},
-						LastNotification: &interviews.NotificationLog{
+						Meet: &[2]int64{1100, 1200},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 900,
 							Notified: [2]bool{true},
 						},
@@ -171,9 +171,9 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			want: []notification{
 				{
-					Interview: interviews.Interview{
-						Interval: [2]int64{1100, 1200},
-						LastNotification: &interviews.NotificationLog{
+					Interview: models.Interview{
+						Meet: &[2]int64{1100, 1200},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 900,
 							Notified: [2]bool{true},
 						},
@@ -192,10 +192,10 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []interviews.Interview{
+				upcoming: []models.Interview{
 					{
-						Interval: [2]int64{1050, 1100},
-						LastNotification: &interviews.NotificationLog{
+						Meet: &[2]int64{1050, 1100},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 950,
 							Notified: [2]bool{true},
 						},
@@ -204,14 +204,14 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			want: []notification{
 				{
-					Interview: interviews.Interview{
-						Interval: [2]int64{1050, 1100},
-						LastNotification: &interviews.NotificationLog{
+					Interview: models.Interview{
+						Meet: &[2]int64{1050, 1100},
+						LastNotification: &models.NotificationLog{
 							UnixTime: 950,
 							Notified: [2]bool{true},
 						},
 					},
-					Recipients: []interviews.Role{interviews.RoleCandidate},
+					Recipients: []models.Role{models.RoleCandidate},
 					NotifyTime: 950,
 					LeftTime:   100 * time.Millisecond,
 				},
@@ -227,7 +227,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			logMock.EXPECT().
 				Warnf(gomock.Any()).AnyTimes()
 
-			iMock, uMock := NewMockinterviewsApi(ctrl), NewMockusersApi(ctrl)
+			repoMock := NewMockrepoClient(ctrl)
 
 			period := time.Duration(tt.fields.notifyPeriod) * time.Millisecond
 			before := make([]time.Duration, 0, len(tt.fields.notifyBefore))
@@ -240,7 +240,7 @@ func Test_getNeededNotifications(t *testing.T) {
 				NotifyBefore: before,
 			}
 
-			b := &Bot{log: logMock, interviews: iMock, users: uMock}
+			b := &Bot{log: logMock, repo: repoMock}
 			b.applyNotifications(cfg)
 
 			got := b.getNeededNotifications(tt.args.now, tt.args.upcoming)

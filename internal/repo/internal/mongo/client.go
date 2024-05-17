@@ -53,7 +53,7 @@ func NewMongoClient(
 	db := client.Database(cfg.Database, &options.DatabaseOptions{})
 	return &mongoClient{
 		c:          client,
-		users:      mongoUsers{db.Collection(string(usersCollectionName))},
+		users:      mongoUsers{db.Collection(usersCollectionName)},
 		interviews: mongoInterviews{db.Collection(interviewsCollectionName)},
 	}, nil
 }

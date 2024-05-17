@@ -80,7 +80,36 @@ func (s *server) Shutdown(ctx context.Context) error {
 }
 
 func (s *server) setupRoutes() {
-	s.http.Patch("/upsertEmployee", s.handleUpsertEmployee)
+	s.http.Post("/upsertEmployee", s.handleUpsertEmployee)
+	s.http.Post("/interviewData", s.handleInterviewData)
+}
+
+func (s *server) handleInterviewData(c *fiber.Ctx) error {
+	iid := c.Query("iid", "")
+	if iid == "" {
+		return c.Status(http.StatusBadRequest).
+			Send([]byte("{\"error\": \"interview id param \\\"iid\\\"\" must be provided}"))
+	}
+
+	var patch struct {
+		Vacancy   *string `json:"vacancy"`
+		Candidate *string `json:"candidate"`
+		Data      *[]byte `json:"data"`
+		Zoom      *string `json:"zoom"`
+	}
+	err := json.Unmarshal(c.Body(), &patch)
+	if err != nil {
+		s.log.Error(errors.WrapFail(err, "unmarshal patch data"))
+		return c.Status(http.StatusInternalServerError).Send(nil)
+	}
+
+	err = s.repo.Interviews().Update(c.Context(), iid, patch.Vacancy, patch.Candidate, patch.Data, patch.Zoom)
+	if err != nil {
+		s.log.Error(errors.WrapFail(err, "do Interviews.Find request"))
+		return c.Status(http.StatusInternalServerError).Send(nil)
+	}
+
+	return c.Status(http.StatusOK).Send(nil)
 }
 
 func (s *server) handleUpsertEmployee(c *fiber.Ctx) error {
@@ -91,7 +120,8 @@ func (s *server) handleUpsertEmployee(c *fiber.Ctx) error {
 
 	err := json.Unmarshal(c.Body(), &req)
 	if err != nil {
-		return errors.WrapFail(err, "unmarshal body as json")
+		s.log.Error(errors.WrapFail(err, "unmarshal body as json"))
+		return c.Status(http.StatusInternalServerError).Send(nil)
 	}
 
 	cat := models.EmployeeUser
@@ -99,10 +129,12 @@ func (s *server) handleUpsertEmployee(c *fiber.Ctx) error {
 		cat = models.HRUser
 	}
 
-	err = s.repo.Users().Upsert(c.Context(), req.TG, nil, &cat, nil)
+	_, err = s.repo.Users().Upsert(c.Context(), req.TG, nil, &cat, nil)
 	if err != nil {
-		return errors.WrapFail(err, "do Users.Upsert request")
+		s.log.Error(errors.WrapFail(err, "do Users.Upsert request"))
+		return c.Status(http.StatusInternalServerError).Send(nil)
 	}
 
-	return nil
+	return c.Status(http.StatusOK).Send(nil)
+
 }

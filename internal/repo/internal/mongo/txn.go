@@ -4,70 +4,64 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readconcern"
-	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 
 	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
-func (m *mongoClient) Make(lvl txn.Model) txn.Txn {
-	return &mongoTxn{lvl: lvl, c: m.c}
+func (m *mongoClient) NewSession() (txn.Session, error) {
+	s, err := m.c.StartSession()
+	if err != nil {
+		return nil, err
+	}
+
+	return &session{s: s}, nil
+}
+
+type session struct {
+	s mongo.Session
+}
+
+func (s *session) Txn() txn.Txn {
+	return &mongoTxn{s: s.s}
+}
+
+func (s *session) Close(ctx context.Context) {
+	s.s.EndSession(ctx)
 }
 
 type mongoTxn struct {
-	lvl txn.Model
-	c *mongo.Client
-	s mongo.Session
-	sc       mongo.SessionContext
+	s        mongo.Session
 	finished bool
 }
 
-func (m *mongoTxn) Close(ctx context.Context) error {
-	defer m.s.EndSession(ctx)
-	if !m.finished {
-		return m.Abort(ctx)
-	}
-
-	return nil
-}
-
 func (m *mongoTxn) Start(ctx context.Context) error {
-	var err error
-
-	enabled := true
-	switch m.lvl {
-	case txn.ModelSnapshotIsolation:
-		m.s, err = m.c.StartSession(&options.SessionOptions{Snapshot: &enabled})
-	case txn.ModelSerializable:
-		m.s, err = m.c.StartSession(&options.SessionOptions{CausalConsistency: &enabled})
-	case txn.ModelStrictSerializable:
-		m.s, err = m.c.StartSession(&options.SessionOptions{
-			DefaultReadConcern: readconcern.Linearizable(),
-			DefaultWriteConcern: writeconcern.Majority(),
-			CausalConsistency: &enabled,
-		})
-	default:
-		return errors.Error("unsupported consistency level \"%d\"", m.lvl)
-	}
-
-	if err != nil {
-		return errors.WrapFail(err, "start mongo session")
-	}
-
-	m.sc = mongo.NewSessionContext(ctx, m.s)
-	return m.sc.StartTransaction()
+	return errors.WrapFail(m.s.StartTransaction(), "start txn")
 }
 
 func (m *mongoTxn) Abort(ctx context.Context) error {
-	defer m.s.EndSession(ctx)
+	err := m.s.CommitTransaction(ctx)
+	if err != nil {
+		return errors.WrapFail(err, "abort txn")
+	}
+
 	m.finished = true
-	return m.sc.AbortTransaction(ctx)
+	return nil
 }
 
 func (m *mongoTxn) Commit(ctx context.Context) error {
-	defer m.s.EndSession(ctx)
+	err := m.s.CommitTransaction(ctx)
+	if err != nil {
+		return errors.WrapFail(err, "commit txn")
+	}
+
 	m.finished = true
-	return m.sc.CommitTransaction(ctx)
+	return nil
+}
+
+func (m *mongoTxn) Close(ctx context.Context) error {
+	if !m.finished {
+		return m.s.AbortTransaction(ctx)
+	}
+	return nil
 }

@@ -61,7 +61,7 @@ type notification struct {
 }
 
 func (b *Bot) sendNeededNotifications() error {
-	now := time.Now().UTC().UnixMilli()
+	now := time.Now().UnixMilli()
 	fut := now + b.notifyBefore[len(b.notifyBefore)-1]
 
 	upcoming, err := b.repo.Interviews().GetReadyAt(b.ctx, fut)
@@ -76,10 +76,19 @@ func (b *Bot) sendNeededNotifications() error {
 
 	b.sendAllNotifications(needed)
 
+	b.log.Infof("sent %s", len(needed))
+
 	return nil
 }
 
 func (b *Bot) sendAllNotifications(ns []notification) {
+	ctx, cancel, err := b.txm.NewSessionContext(b.ctx, b.notifyPeriod)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "create session context"))
+		return
+	}
+	defer cancel()
+
 	for _, n := range ns {
 		for _, role := range n.Recipients {
 			tgID := int64(0)
@@ -90,12 +99,12 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 				tgID = n.Interview.CandidateTg
 			}
 
-			b.sendOneNotification(tgID, n, role)
+			b.sendOneNotification(ctx, tgID, n, role)
 		}
 	}
 }
 
-func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) {
+func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notification, role models.Role) {
 	var msg string
 	if n.LeftTime == 0 {
 		msg = fmt.Sprintf(
@@ -109,10 +118,19 @@ func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) 
 		)
 	}
 
-	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
-	defer cancel()
+	tx, err := txn.Start(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "start txn"))
+		return
+	}
+	defer func() {
+		err := tx.Close(ctx)
+		if err != nil {
+			b.log.Warn(errors.WrapFail(err, "close txn"))
+		}
+	}()
 
-	err := b.notify(tgID, msg)
+	err = b.notify(tgID, msg)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
 		return
@@ -122,6 +140,11 @@ func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) 
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
 	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "commit txn"))
+	}
 }
 
 func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []notification {
@@ -130,15 +153,15 @@ func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []n
 	both := []models.Role{models.RoleInterviewer, models.RoleCandidate}
 
 	for _, i := range upcoming {
-		left := i.Interval[0] - now
+		left := i.Meet[0] - now
 
 		// check if interview is almost started
 		if left < b.notifyPeriod.Milliseconds() {
-			if i.LastNotification == nil || i.LastNotification.UnixTime != i.Interval[0] {
+			if i.LastNotification == nil || i.LastNotification.UnixTime != i.Meet[0] {
 				needed = append(needed, notification{
 					Interview:  i,
 					Recipients: both,
-					NotifyTime: i.Interval[0],
+					NotifyTime: i.Meet[0],
 					LeftTime:   0,
 				})
 				continue
@@ -159,11 +182,11 @@ func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []n
 		last := i.LastNotification
 		chosenInt := b.notifyBefore[chosenNotify]
 
-		if last == nil || i.Interval[0]-last.UnixTime > chosenInt {
+		if last == nil || i.Meet[0]-last.UnixTime > chosenInt {
 			needed = append(needed, notification{
 				Interview:  i,
 				Recipients: both,
-				NotifyTime: i.Interval[0] - chosenInt,
+				NotifyTime: i.Meet[0] - chosenInt,
 				LeftTime:   time.Duration(chosenInt) * time.Millisecond,
 			})
 			continue
@@ -178,7 +201,7 @@ func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []n
 			Interview:  i,
 			NotifyTime: last.UnixTime,
 			Recipients: both[1:],
-			LeftTime:   time.Duration(i.Interval[0]-last.UnixTime) * time.Millisecond,
+			LeftTime:   time.Duration(i.Meet[0]-last.UnixTime) * time.Millisecond,
 		})
 	}
 

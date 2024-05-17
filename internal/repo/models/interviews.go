@@ -4,13 +4,16 @@ import "context"
 
 type InterviewsRepo interface {
 	// Create is API method for registering an interview. Data may contain confidential information.
-	Create(ctx context.Context, vacancy string, candidateTg int64) (id string, err error)
+	Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error)
 
 	// Delete completely removes interview object
 	Delete(ctx context.Context, id string) (found bool, err error)
 
+	// Update patches interview
+	Update(ctx context.Context, id string, vacancy *string, candidate *string, data *[]byte, zoom *string) error
+
 	// Schedule assigns interview to interviewer
-	Schedule(ctx context.Context, id string, interviewerTg int64, slot Meeting) error
+	Schedule(ctx context.Context, id string, candidate User, interviewer User, slot Meeting) error
 
 	// Notify saves information about notification
 	Notify(ctx context.Context, id string, at int64, notified Role) error
@@ -19,7 +22,7 @@ type InterviewsRepo interface {
 	Find(ctx context.Context, id string) (*Interview, error)
 
 	// FindByUser returns all user's interviews
-	FindByUser(ctx context.Context, userTg int64) ([]Interview, error)
+	FindByUser(ctx context.Context, username string) ([]Interview, error)
 
 	// GetReadyAt returns list of interviews that have started and not finished at the given timestamp.
 	GetReadyAt(ctx context.Context, at int64) (interviews []Interview, err error)
@@ -30,35 +33,44 @@ type InterviewsRepo interface {
 	// Done marks the interview done. Some logic can be added for sending results template to be filling in
 	// to the interviewer, or something else.
 	Done(ctx context.Context, id string) (err error)
+
+	// FixTg sets candidateTg value for interviews with candidate == username
+	FixTg(ctx context.Context, username string, tg int64) (err error)
 }
 
 type Interview struct {
-	ID            string `json:"id"          bson:"_id,omitempty"`
-	InterviewerTg int64  `json:"interviewer" bson:"interviewer"`
-	CandidateTg   int64  `json:"candidate"   bson:"candidate"`
-
+	ID      string `json:"id"          bson:"_id,omitempty"`
 	Vacancy string `json:"vacancy"     bson:"vacancy"`
-	Data    []byte `json:"data"        bson:"data"`
-	Zoom    string `json:"zoom"        bson:"zoom"`
 
-	Interval *[2]int64       `json:"interval" bson:"interval"`
-	Status   InterviewStatus `json:"status"    bson:"status"`
+	CandidateUN   string `json:"candidate"   bson:"candidate"`
+	InterviewerUN string `json:"interviewer" bson:"interviewer"`
 
-	CancelledBy Role `json:"cancelled_by" bson:"cancelled_by"`
+	CandidateTg   int64 `json:"candidate_tg"   bson:"candidate_tg"`
+	InterviewerTg int64 `json:"interviewer_tg" bson:"interviewer_tg"`
 
-	LastNotification *NotificationLog `json:"last_notifications" bson:"last_notifications"`
+	Data []byte `json:"data"        bson:"data"`
+	Zoom string `json:"zoom"        bson:"zoom"`
+
+	Status      InterviewStatus `json:"status"       bson:"status"`
+	Meet        *[2]int64       `json:"meet"         bson:"meet"`
+	CancelledBy Role            `json:"cancelled_by" bson:"cancelled_by"`
+
+	LastNotification *NotificationLog `json:"last_notification" bson:"last_notification"`
 }
 
 const (
 	InterviewFieldID               = "id"
-	InterviewFieldInterviewerTg    = "interviewer"
-	InterviewFieldCandidateTg      = "candidate"
+	InterviewFieldCandidateUN      = "candidate"
+	InterviewFieldInterviewerUN    = "interviewer"
+	InterviewFieldCandidateTg      = "candidate_tg"
+	InterviewFieldInterviewerTg    = "interviewer_tg"
 	InterviewFieldVacancy          = "vacancy"
 	InterviewFieldData             = "data"
-	InterviewFieldInterval         = "interval"
+	InterviewFieldZoom             = "zoom"
+	InterviewFieldMeet             = "meet"
 	InterviewFieldStatus           = "status"
 	InterviewFieldCancelledBy      = "cancelled_by"
-	InterviewFieldLastNotification = "last_notifications"
+	InterviewFieldLastNotification = "last_notification"
 )
 
 type NotificationLog struct {
@@ -82,7 +94,7 @@ const (
 
 const (
 	// InterviewStatusNew is set when interview has been created
-	InterviewStatusNew = InterviewStatus(iota) + 1
+	InterviewStatusNew = InterviewStatus(iota)
 
 	// InterviewStatusScheduled is set when its tine is known
 	InterviewStatusScheduled

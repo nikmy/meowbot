@@ -42,7 +42,7 @@ func TestBot_showInterviews(t *testing.T) {
 		{
 			name: "err while fetching interview",
 			mock: mocks{
-				sender: &telebot.User{Username: "test"},
+				sender: &telebot.User{ID: 42},
 				iErr:   errors.New("mock"),
 			},
 			want: want{fail: true},
@@ -50,15 +50,19 @@ func TestBot_showInterviews(t *testing.T) {
 		{
 			name: "no assigned interviews",
 			mock: mocks{
-				sender: &telebot.User{Username: "test"},
+				sender: &telebot.User{ID: 42},
 			},
 			want: want{fail: false},
 		},
 		{
 			name: "have assigned interviews",
 			mock: mocks{
-				sender:     &telebot.User{Username: "test"},
-				interviews: []models.Interview{{}, {}},
+				sender: &telebot.User{ID: 42},
+				interviews: []models.Interview{
+					{Meet: &[2]int64{10, 20}},
+					{},
+					{Meet: &[2]int64{20, 30}},
+				},
 			},
 			want: want{fail: false},
 		},
@@ -71,18 +75,21 @@ func TestBot_showInterviews(t *testing.T) {
 			cMock := NewMocktelebotContext(ctrl)
 
 			cMock.EXPECT().Sender().Return(tt.mock.sender).Times(1)
-			cMock.EXPECT().Send(gomock.Any()).Times(1).Return(*new(error))
+			cMock.EXPECT().Send(gomock.Any(), gomock.Any()).Times(1).Return(*new(error))
 
 			sMock := NewMockfsmContext(ctrl)
 			sMock.EXPECT().Set(initialState)
 
 			iMock := NewMockinterviewsApi(ctrl)
+			repoMock := NewMockrepoClient(ctrl)
 
 			if tt.mock.sender != nil {
+				iMock.EXPECT().FixTg(gomock.Any(), tt.mock.sender.Username, tt.mock.sender.ID).Return((error)(nil))
 				iMock.EXPECT().
 					FindByUser(gomock.Any(), tt.mock.sender.Username).
 					Return(tt.mock.interviews, tt.mock.iErr).
-					MaxTimes(1)
+					Times(1)
+				repoMock.EXPECT().Interviews().Return(iMock).MaxTimes(2)
 			}
 
 			log := NewMockloggerImpl(ctrl)
@@ -91,8 +98,8 @@ func TestBot_showInterviews(t *testing.T) {
 			}
 
 			b := &Bot{
-				interviews: iMock,
-				log:        log,
+				repo: repoMock,
+				log:  log,
 			}
 
 			err := b.showInterviews(cMock, sMock)

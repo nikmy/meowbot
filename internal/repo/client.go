@@ -13,7 +13,7 @@ type Client interface {
 	Users() models.UsersRepo
 	Close(ctx context.Context) error
 
-	Make(lvl txn.Model) txn.Txn
+	NewSession() (txn.Session, error)
 }
 
 type MongoConfig = mongorepo.Config

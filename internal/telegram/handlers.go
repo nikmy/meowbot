@@ -2,8 +2,8 @@ package telegram
 
 import (
 	"cmp"
-	"context"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
@@ -20,8 +20,8 @@ import (
 const (
 	initialState = fsm.DefaultState
 
-	matchReadIIDState      fsm.State = "enterIdForMatch"
-	matchReadIntervalState fsm.State = "chooseInterval"
+	matchReadIIDState      fsm.State = "matchReadIId"
+	matchReadIntervalState fsm.State = "matchReadInt"
 
 	createReadInfoState fsm.State = "crReadInfo"
 	createReadCTgState  fsm.State = "crReadTg"
@@ -29,17 +29,19 @@ const (
 	deleteReadIIDState fsm.State = "delReadIID"
 
 	cancelReadIIDState fsm.State = "cReadIID"
+
+	addIntReadTgState fsm.State = "addIReadTg"
+	delIntReadTgState fsm.State = "delIReadTg"
 )
 
 func usage(hr bool) string {
 	const common = "" +
 		"Доступные команды:\n" +
 		"/show_interviews — показать все мои собеседования\n" +
-		"/cancel — отменить запланированное собеседование\n" +
 		"/match — подобрать время для собеседования, где я - кандидат\n" +
 		"/cancel — отменить запланированное собеседование\n"
 
-	if hr {
+	if !hr {
 		return common
 	}
 
@@ -48,7 +50,6 @@ func usage(hr bool) string {
 		"/delete — удалить собеседование\n" +
 		"/addInterviewer — добавить интервьюера\n" +
 		"/delInterviewer — удалить интервьюера\n"
-
 }
 
 func (b *Bot) setupHandlers() {
@@ -59,27 +60,40 @@ func (b *Bot) setupHandlers() {
 		nil,
 	)
 
-	manager.Bind(telebot.OnText, initialState, b.start)
-	manager.Bind("/start", fsm.AnyState, b.start)
+	manager.Bind(telebot.OnText, initialState, b.panicGuard(b.start))
+	manager.Bind("/start", fsm.AnyState, b.panicGuard(b.start))
 
-	manager.Bind("/show_interviews", fsm.AnyState, b.showInterviews)
+	manager.Bind("/show_interviews", fsm.AnyState, b.panicGuard(b.showInterviews))
 
-	manager.Bind("/match", initialState, b.startMatch)
-	manager.Bind(telebot.OnText, matchReadIIDState, b.matchReadIID)
-	manager.Bind(telebot.OnText, matchReadIntervalState, b.match)
+	manager.Bind("/match", initialState, b.panicGuard(b.runMatch))
+	manager.Bind(telebot.OnText, matchReadIIDState, b.panicGuard(b.matchReadIID))
+	manager.Bind(telebot.OnText, matchReadIntervalState, b.panicGuard(b.match))
 
-	manager.Bind("/create", initialState, b.startCreate)
-	manager.Bind(telebot.OnText, createReadInfoState, b.createReadInfo)
-	manager.Bind(telebot.OnText, createReadCTgState, b.createReadCandidate)
+	manager.Bind("/cancel", initialState, b.panicGuard(b.runCancel))
+	manager.Bind(telebot.OnText, cancelReadIIDState, b.panicGuard(b.cancel))
 
-	manager.Bind("/delete", initialState, b.startDelete)
-	manager.Bind(telebot.OnText, deleteReadIIDState, b.delete)
+	manager.Bind("/create", initialState, b.panicGuard(b.runCreate))
+	manager.Bind(telebot.OnText, createReadInfoState, b.panicGuard(b.createReadInfo))
+	manager.Bind(telebot.OnText, createReadCTgState, b.panicGuard(b.create))
 
-	manager.Bind("/cancel", initialState, b.startCancel)
-	manager.Bind(telebot.OnText, cancelReadIIDState, b.cancel)
+	manager.Bind("/delete", initialState, b.panicGuard(b.runDelete))
+	manager.Bind(telebot.OnText, deleteReadIIDState, b.panicGuard(b.delete))
 
-	manager.Bind("/addInterviewer", initialState, b.addInterviewer)
-	manager.Bind("/delInterviewer", initialState, b.delInterviewer)
+	manager.Bind("/addInterviewer", initialState, b.panicGuard(b.runAddInterviewer))
+	manager.Bind(telebot.OnText, addIntReadTgState, b.panicGuard(b.addInterviewer))
+	manager.Bind("/delInterviewer", initialState, b.panicGuard(b.runDelInterviewer))
+	manager.Bind(telebot.OnText, delIntReadTgState, b.panicGuard(b.delInterviewer))
+}
+
+func (b *Bot) panicGuard(h fsm.Handler) fsm.Handler {
+	return func(c telebot.Context, s fsm.Context) error {
+		defer func() {
+			if r := recover(); r != nil {
+				b.log.Errorf("panic caught: %v\nstacktrace: %s", r, string(debug.Stack()))
+			}
+		}()
+		return h(c, s)
+	}
 }
 
 func (b *Bot) setState(s fsm.Context, target fsm.State) {
@@ -105,11 +119,9 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	isHR := b.checkHR(sender.Username)
-
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, nil)
+	known, err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, nil)
 	if err != nil {
-		b.log.Error(errors.WrapFail(err, "save user telegram id"))
+		b.log.Error(errors.WrapFail(err, "upsert user on start"))
 		return b.final(
 			c, s,
 			"Ошибка. Если вы используете бота в первый раз, "+
@@ -117,11 +129,16 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 		)
 	}
 
+	err = b.repo.Interviews().FixTg(b.ctx, sender.Username, sender.ID)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "fix tg"))
+	}
+
 	b.setState(s, initialState)
-	return c.Send(usage(isHR))
+	return c.Send(usage(known != nil && known.Category == models.HRUser))
 }
 
-func (b *Bot) startMatch(c telebot.Context, s fsm.Context) error {
+func (b *Bot) runMatch(c telebot.Context, s fsm.Context) error {
 	b.setState(s, matchReadIIDState)
 	return c.Send("Введите ID собеседования")
 }
@@ -143,7 +160,7 @@ func (b *Bot) matchReadIID(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	if i.CandidateTg != sender.ID {
+	if i.CandidateUN != sender.Username {
 		return b.final(c, s, "Вы не являетесь кандидатом в этом собеседовании")
 	}
 
@@ -169,9 +186,30 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		b.log.Debug(err)
 		return c.Send("Плохой формат даты.")
 	}
-	left = left.UTC()
 
-	meeting := models.Meeting{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
+	if left.Sub(time.Now()) < time.Minute {
+		return b.final(c, s, "В это время нельзя провести интервью")
+	}
+
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	cand, err := b.repo.Users().Get(b.ctx, sender.Username)
+	if err != nil {
+		return b.fail(c, s, err)
+	}
+	if cand == nil {
+		return b.final(c, s, "Мы не знакомы. Попробуйте /start")
+	}
+
+	meet := models.Meeting{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
+
+	_, free := cand.AddMeeting(meet)
+	if !free {
+		return b.final(c, s, "В это время вы заняты")
+	}
 
 	i, err := b.repo.Interviews().Find(b.ctx, iid)
 	if err != nil {
@@ -182,75 +220,53 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Такого собеседования нет")
 	}
 
-	if i.Interval != nil {
-		return b.final(c, s, fmt.Sprintf("Собеседование уже назначено на %s", time.UnixMilli(i.Interval[0])))
+	if i.Meet != nil {
+		return b.final(c, s, fmt.Sprintf("Собеседование уже назначено на %s", time.UnixMilli(i.Meet[0])))
 	}
 
-	free, err := b.repo.Users().Match(b.ctx, meeting)
+	pool, err := b.repo.Users().Match(b.ctx, meet)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Mathc request"))
 	}
 
-	sender := c.Sender()
-	if sender == nil {
-		return b.fail(c, s, errors.Fail("get sender"))
+	ctx, cancel, err := b.txm.NewSessionContext(b.ctx, time.Second*10)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "create session context"))
 	}
+	defer cancel()
 
 	assigned, candFree := false, true
-	for candFree && !assigned && len(free) > 0 {
-		assigned, candFree = b.tryAssign(sender.Username, free[0], iid, meeting)
+	for candFree && len(pool) > 0 {
+		assigned, candFree = b.tryAssign(ctx, *cand, pool[0], iid, meet)
+		if b.ctx.Err() != nil {
+			b.log.Error(err)
+			break
+		}
+		if assigned {
+			break
+		}
+		pool = pool[1:]
 	}
 
 	if !candFree {
 		return b.final(c, s, "В это время вы заняты")
 	}
 
-	if len(free) == 0 {
+	if len(pool) == 0 {
 		return b.final(
 			c, s,
 			"На выбранный слот совпадений не нашлось :(\nПопробуйте изменить дату или время.",
 		)
 	}
 
-	msg := fmt.Sprintf("Назначили собеседование на %s UTC", left.Format(time.DateTime))
+	msg := fmt.Sprintf("Назначили собеседование `%s` на %s", iid, left.Format("02.01.06 15:04:05 MST"))
 
-	err = b.notify(free[0].Telegram, msg)
+	err = b.notify(pool[0].Telegram, msg)
 	if err != nil {
-		b.log.Error(errors.WrapFail(err, "notify interviewer"))
+		b.log.Warn(errors.WrapFail(err, "notify interviewer"))
 	}
 
-	return b.final(c, s, msg)
-}
-
-func (b *Bot) tryAssign(candidate string, interviewer models.User, iid string, slot models.Meeting) (bool, bool) {
-	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
-	defer cancel()
-
-	txn.Start(ctx)
-
-	scheduled, err := b.repo.Users().Schedule(ctx, candidate, slot)
-	if err != nil || !scheduled {
-		b.log.Warn(errors.WrapFail(err, "schedule interview for candidate"))
-		return false, false
-	}
-
-	assigned, err := b.repo.Users().Schedule(ctx, interviewer.Username, slot)
-	if err != nil {
-		b.log.Warn(errors.WrapFail(err, "assign interview to interviewer"))
-		return false, true
-	}
-
-	if !assigned {
-		return false, true
-	}
-
-	err = b.repo.Interviews().Schedule(ctx, iid, interviewer.Telegram, slot)
-	if err != nil {
-		b.log.Warn(errors.WrapFail(err, "schedule interview"))
-		return false, true
-	}
-
-	return true, true
+	return b.final(c, s, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
 }
 
 func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
@@ -259,7 +275,12 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	assigned, err := b.repo.Interviews().FindByUser(b.ctx, sender.ID)
+	err := b.repo.Interviews().FixTg(b.ctx, sender.Username, sender.ID)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "fix tg"))
+	}
+
+	assigned, err := b.repo.Interviews().FindByUser(b.ctx, sender.Username)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "find by candidate"))
 	}
@@ -269,9 +290,15 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 	}
 
 	slices.SortFunc(assigned, func(a, b models.Interview) int {
+		if a.Meet == nil {
+			return -1
+		}
+		if b.Meet == nil {
+			return 1
+		}
 		return cmp.Or(
-			cmp.Compare(a.Interval[0], b.Interval[0]),
-			cmp.Compare(a.Interval[1], b.Interval[1]),
+			cmp.Compare(a.Meet[0], b.Meet[0]),
+			cmp.Compare(a.Meet[1], b.Meet[1]),
 		)
 	})
 
@@ -294,18 +321,18 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		}
 		sb.WriteString("): ")
 
-		if i.Interval == nil {
+		if i.Meet == nil {
 			sb.WriteString("не запланировано;\n")
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf("%s;\n", time.UnixMilli(i.Interval[0]).Format(time.DateTime)))
+		sb.WriteString(fmt.Sprintf("%s;\n", time.UnixMilli(i.Meet[0]).Format(time.DateTime)))
 	}
 
 	return b.final(c, s, sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
 }
 
-func (b *Bot) startCreate(c telebot.Context, s fsm.Context) error {
+func (b *Bot) runCreate(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
@@ -332,34 +359,42 @@ func (b *Bot) createReadInfo(c telebot.Context, s fsm.Context) error {
 	return c.Send("Введите telegram кандидата")
 }
 
-func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
+func (b *Bot) create(c telebot.Context, s fsm.Context) error {
 	var vac string
 	err := s.Get("vac", &vac)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "get vacancy from state"))
 	}
 
-	tg := c.Text()
-	if len(tg) < 2 || tg[0] != '@' {
-		return b.final(c, s, "Некорректный telegram")
+	tg, msg := b.readTg(c)
+	if msg != "" {
+		return b.final(c, s, msg)
 	}
-	tg = tg[1:]
 
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err = b.repo.Users().Upsert(b.ctx, tg, nil, nil, nil)
+	known, err := b.repo.Users().Upsert(b.ctx, tg, nil, nil, nil)
 	if err != nil {
-		b.log.Error(errors.WrapFail(err, "upsert user"))
-		return b.fail(c, s, err)
+		return b.fail(c, s, errors.WrapFail(err, "upsert user"))
 	}
 
-	id, err := b.repo.Interviews().Create(b.ctx, vac, sender.ID)
+	id, err := b.repo.Interviews().Create(b.ctx, vac, tg)
 	if err != nil {
 		b.log.Error(err)
 		return b.fail(c, s, errors.WrapFail(err, "create interview"))
+	}
+
+	if known != nil && known.Telegram != 0 {
+		err = b.notify(known.Telegram, fmt.Sprintf(
+			"Для вас создано новое собеседование на должность %s, id —`%s`.\nИспользуйте /match, чтобы подобрать удобное время",
+			vac, id,
+		))
+		if err != nil {
+			b.log.Warn(errors.WrapFail(err, "notify candidate about new interview"))
+		}
 	}
 
 	return b.final(
@@ -369,7 +404,7 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 	)
 }
 
-func (b *Bot) startDelete(c telebot.Context, s fsm.Context) error {
+func (b *Bot) runDelete(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
@@ -399,7 +434,7 @@ func (b *Bot) delete(c telebot.Context, s fsm.Context) error {
 	return b.final(c, s, "Собеседование удалено")
 }
 
-func (b *Bot) startCancel(c telebot.Context, s fsm.Context) error {
+func (b *Bot) runCancel(c telebot.Context, s fsm.Context) error {
 	b.setState(s, cancelReadIIDState)
 	return c.Send("Введите ID собеседования")
 }
@@ -412,10 +447,22 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
+	ctx, cancel, err := b.txm.NewSessionContext(b.ctx, time.Second*5)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "create session context"))
+	}
 	defer cancel()
 
-	txn.Start(ctx)
+	tx, err := txn.Start(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "start txn"))
+	}
+	defer func() {
+		err := tx.Close(ctx)
+		if err != nil {
+			b.log.Warn(errors.WrapFail(err, "close txn"))
+		}
+	}()
 
 	i, err := b.repo.Interviews().Find(b.ctx, iid)
 	if err != nil {
@@ -426,7 +473,7 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Собеседование не найдено")
 	}
 
-	if i.Interval == nil {
+	if i.Meet == nil {
 		return b.final(c, s, "Собеседование не запланировано")
 	}
 
@@ -435,22 +482,36 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		side = models.RoleCandidate
 	}
 
-	err = b.repo.Users().Free(b.ctx, sender.Username, *i.Interval)
+	scheduled, err := b.cancelInterview(ctx, i, side)
 	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "do Users.Free request"))
+		return b.fail(c, s, errors.WrapFail(err, "cancel interview"))
+	}
+	if !scheduled {
+		return b.final(c, s, "Интервью не запланировано")
 	}
 
-	err = b.repo.Interviews().Cancel(b.ctx, iid, side)
-	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Cancel request"))
+	switch side {
+	case models.RoleInterviewer:
+		err = b.notify(i.CandidateTg, fmt.Sprintf("Интервьюер отменил собеседование `%s`", i.ID))
+		err = errors.WrapFail(err, "notify candidate about cancel")
+	case models.RoleCandidate:
+		err = b.notify(i.InterviewerTg, fmt.Sprintf("Кандидат отменил собеседование `%s`", i.ID))
+		err = errors.WrapFail(err, "notify candidate about cancel")
 	}
 
-	txn.Commit(ctx)
+	if err != nil {
+		return b.fail(c, s, err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "commit txn"))
+	}
 
 	return b.final(c, s, "Собеседование отменено")
 }
 
-func (b *Bot) addInterviewer(c telebot.Context, s fsm.Context) error {
+func (b *Bot) runAddInterviewer(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
@@ -461,17 +522,31 @@ func (b *Bot) addInterviewer(c telebot.Context, s fsm.Context) error {
 		return b.denyNotHR(c, s)
 	}
 
-	cat, grade := models.EmployeeUser, 1
+	b.setState(s, addIntReadTgState)
+	return c.Send("Введите telegram будущего интервьюера")
+}
 
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &cat, &grade)
+func (b *Bot) addInterviewer(c telebot.Context, s fsm.Context) error {
+	tg, msg := b.readTg(c)
+	if msg != "" {
+		return b.final(c, s, msg)
+	}
+
+	grade := 1
+
+	old, err := b.repo.Users().Upsert(b.ctx, tg, nil, nil, &grade)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
 
-	return b.final(c, s, "Теперь вы — интервьюер! Ждите собеседований ;)")
+	if old.IntGrade > models.GradeNotInterviewer {
+		return b.final(c, s, fmt.Sprintf("@%s уже интервьюер", old.Username))
+	}
+
+	return b.final(c, s, fmt.Sprintf("Теперь @%s — интервьюер", old.Username))
 }
 
-func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
+func (b *Bot) runDelInterviewer(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
@@ -480,28 +555,64 @@ func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
 	isHR := b.checkHR(sender.Username)
 	if !isHR {
 		return b.denyNotHR(c, s)
+	}
+
+	b.setState(s, delIntReadTgState)
+	return c.Send("Введите telegram интервьюера")
+}
+
+func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
+	tg, msg := b.readTg(c)
+	if msg != "" {
+		return b.final(c, s, msg)
 	}
 
 	gradeDown := 0
 
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, &gradeDown)
+	ctx, cancel, err := b.txm.NewSessionContext(b.ctx, time.Second*5)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "init session context"))
+	}
+	defer cancel()
+
+	tx, err := txn.Start(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "start txn"))
+	}
+	defer func() {
+		err := tx.Close(ctx)
+		if err != nil {
+			b.log.Warn(errors.WrapFail(err, "close txn"))
+		}
+	}()
+
+	old, err := b.repo.Users().Update(b.ctx, tg, nil, nil, &gradeDown)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
-
-	return b.final(c, s, "Вы больше не интервьюер (или им не были)")
-}
-
-func (b *Bot) denyNotHR(c telebot.Context, s fsm.Context) error {
-	return b.final(c, s, "Это может сделать только HR сотрудник")
-}
-
-func (b *Bot) checkHR(username string) bool {
-	user, err := b.repo.Users().Get(b.ctx, username)
-	if err != nil {
-		b.log.Warn(errors.WrapFail(err, "get user for checking HR permissions"))
-		return false
+	if old == nil {
+		return b.final(c, s, "Такого пользователя не существует")
 	}
 
-	return user.Category >= models.HRUser
+	if old.IntGrade == models.GradeNotInterviewer {
+		return b.final(c, s, fmt.Sprintf("@%s уже не интервьюер", old.Username))
+	}
+
+	assigned, err := b.repo.Interviews().FindByUser(ctx, tg)
+	if err != nil {
+		return errors.WrapFail(err, "find interviews assigned to deleted interviewer")
+	}
+
+	for i := range assigned {
+		if assigned[i].InterviewerUN != tg {
+			continue
+		}
+
+		_, err := b.cancelInterview(ctx, &assigned[i], models.RoleInterviewer)
+		if err != nil {
+			return errors.WrapFail(err, "cancel interview assigned to deleted interviewer")
+		}
+	}
+
+	return b.final(c, s, fmt.Sprintf("@%s больше не интервьюер", old.Username))
 }

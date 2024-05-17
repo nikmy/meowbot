@@ -24,9 +24,8 @@ func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error)
 	}
 
 	bot := &Bot{
-		bot:        b,
-		log:        logger.With("bot"),
-		txm:        txn.NewManager(logger.With("txn"), repoClient),
+		bot:  b,
+		log:  logger.With("bot"),
 		repo: repoClient,
 	}
 
@@ -41,7 +40,7 @@ type Bot struct {
 	ctx context.Context
 	log logger.Logger
 
-	txm        txn.Manager
+	txm  txn.Manager
 	repo repo.Client
 
 	notifyBefore []int64
@@ -50,6 +49,14 @@ type Bot struct {
 
 func (b *Bot) Run(ctx context.Context) error {
 	b.ctx = ctx
+
+	b.txm = txn.NewManager(
+		ctx,
+		b.log.With("txn"),
+		b.repo,
+		time.Second*3,
+	)
+
 	b.setupHandlers()
 	go b.bot.Start()
 	b.runNotifier()

@@ -1,9 +1,12 @@
 package models
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 func (u User) AddMeeting(meeting Meeting) (int, bool) {
-	scheduled := u.Meetings
+	scheduled := u.Assigned
 
 	n := len(scheduled)
 
@@ -32,4 +35,19 @@ func (u User) AddMeeting(meeting Meeting) (int, bool) {
 	}
 
 	return idx, true
+}
+
+func (u User) FindAndDeleteMeeting(meeting Meeting) ([]Meeting, bool) {
+	idx := sort.Search(len(u.Assigned), func(i int) bool {
+		return u.Assigned[i][0] >= meeting[0]
+	})
+	if idx == len(u.Assigned) {
+		return nil, false
+	}
+
+	if u.Assigned[idx][1] != meeting[1] {
+		return nil, false
+	}
+
+	return slices.Delete(u.Assigned, idx, idx+1), true
 }

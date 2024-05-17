@@ -24,7 +24,7 @@ func All() bson.M {
 	return bson.M{}
 }
 
-func FilterByID(id string) bson.M {
+func ID(id string) bson.M {
 	return bson.M{"_id": id}
 }
 

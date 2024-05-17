@@ -108,15 +108,14 @@ func TestUser_AddMeeting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := User{Meetings: tt.args.intervals}
+			u := User{Assigned: tt.args.intervals}
 			gotIdx, gotOk := u.AddMeeting(tt.args.t)
 			require.Equal(t, tt.wantIdx, gotIdx)
 			require.Equal(t, tt.wantOk, gotOk)
 
 			require.NotPanics(t, func() {
-				_ = slices.Insert(u.Meetings, gotIdx, tt.args.t)
+				_ = slices.Insert(u.Assigned, gotIdx, tt.args.t)
 			})
 		})
 	}
 }
-
