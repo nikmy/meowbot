@@ -29,6 +29,9 @@ func FilterByID(id string) bson.M {
 }
 
 func Field[T any](field string, value *T) bson.M {
+	if value == nil {
+		return nil
+	}
 	return bson.M{field: value}
 }
 

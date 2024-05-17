@@ -11,6 +11,8 @@ import (
 type Client interface {
 	Interviews() models.InterviewsRepo
 	Users() models.UsersRepo
+	Close(ctx context.Context) error
+
 	Make(lvl txn.Model) txn.Txn
 }
 

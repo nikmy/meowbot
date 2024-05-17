@@ -109,7 +109,7 @@ func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) 
 		)
 	}
 
-	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSerializable)
+	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
 	defer cancel()
 
 	err := b.notify(tgID, msg)

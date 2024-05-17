@@ -2,7 +2,7 @@ package models
 
 import "sort"
 
-func (u *User) AddMeeting(meeting Meeting) (int, bool) {
+func (u User) AddMeeting(meeting Meeting) (int, bool) {
 	scheduled := u.Meetings
 
 	n := len(scheduled)

@@ -71,3 +71,7 @@ func (m *mongoClient) Interviews() models.InterviewsRepo {
 func (m *mongoClient) Users() models.UsersRepo {
 	return m.users
 }
+
+func (m *mongoClient) Close(ctx context.Context) error {
+	return errors.WrapFail(m.c.Disconnect(ctx), "disconnect from mongo db")
+}

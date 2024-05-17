@@ -11,7 +11,6 @@ import (
 
 	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/logger"
 	"github.com/nikmy/meowbot/pkg/mongotools"
 )
 
@@ -19,14 +18,21 @@ type mongoUsers struct {
 	coll *mongo.Collection
 }
 
-func (u mongoUsers) Upsert(ctx context.Context, username string, telegramID *int64, employee *bool) error {
+func (u mongoUsers) Upsert(
+	ctx context.Context,
+	username string,
+	telegramID *int64,
+	category *models.UserCategory,
+	intGrade *int,
+) error {
 	upsert := true
 	_, err := u.coll.UpdateOne(
 		ctx,
 		mongotools.Field(models.UserFieldUsername, &username),
 		mongotools.SetAll(
 			mongotools.Field(models.UserFieldTelegram, telegramID),
-			mongotools.Field(models.UserFieldEmployee, employee),
+			mongotools.Field(models.UserFieldCategory, category),
+			mongotools.Field(models.UserFieldIntGrade, &intGrade),
 		),
 		&options.UpdateOptions{Upsert: &upsert},
 	)
@@ -50,7 +56,7 @@ func (u mongoUsers) Get(ctx context.Context, username string) (*models.User, err
 }
 
 func (u mongoUsers) Match(ctx context.Context, slot [2]int64) ([]models.User, error) {
-	c, err := u.coll.Find(ctx, mongotools.All())
+	c, err := u.coll.Find(ctx, interviewersOnly())
 	if err != nil {
 		return nil, errors.WrapFail(err, "select users to match")
 	}
@@ -70,6 +76,10 @@ func (u mongoUsers) Schedule(ctx context.Context, username string, meeting model
 	user, err := u.Get(ctx, username)
 	if err != nil {
 		return false, errors.WrapFail(err, "find user")
+	}
+
+	if user.IntGrade == models.GradeNotInterviewer {
+		return false, nil
 	}
 
 	insertIdx, can := user.AddMeeting(meeting)
@@ -124,36 +134,6 @@ func (u mongoUsers) Free(ctx context.Context, username string, meeting models.Me
 	return nil
 }
 
-type mongoRepo[T any] struct {
-	coll *mongo.Collection
-	acid mongo.Session
-	log  logger.Logger
-}
-
-func (r *mongoRepo[T]) Txn(ctx context.Context, do func() error) (bool, error) {
-	session, err := r.coll.Database().Client().StartSession()
-	if err != nil {
-		return false, errors.WrapFail(err, "start mongo session")
-	}
-
-	ok := false
-	err = mongo.WithSession(ctx, session, func(sc mongo.SessionContext) error {
-		err := session.StartTransaction()
-		if err != nil {
-			return errors.WrapFail(err, "begin transaction")
-		}
-
-		err = do()
-		if err != nil {
-			r.log.Errorf("aborting txn because: %s", err.Error())
-			err = session.AbortTransaction(sc)
-			return errors.WrapFail(err, "abort transaction")
-		}
-
-		err = session.CommitTransaction(sc)
-		ok = err == nil
-		return errors.WrapFail(err, "commit transaction")
-	})
-
-	return ok, errors.WrapFail(err, "perform mongo transaction")
+func interviewersOnly() bson.M {
+	return bson.M{models.UserFieldIntGrade: bson.D{{"$gt", models.GradeNotInterviewer}}}
 }

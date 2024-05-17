@@ -31,14 +31,25 @@ const (
 	cancelReadIIDState fsm.State = "cReadIID"
 )
 
-const USAGE = "Доступные команды:\n" +
-	"/match — подобрать время для собеседования (функционал для кандидата)\n" +
-	"/show_interviews — показать все мои собеседования\n" +
-	"/create — создать собеседование\n" +
-	"/delete — удалить собеседование\n" +
-	"/cancel — отменить запланированное собеседование\n" +
-	"/join — присоединиться к команде интервьюеров\n" +
-	"/leave — перестать быть интервьюером\n"
+func usage(hr bool) string {
+	const common = "" +
+		"Доступные команды:\n" +
+		"/show_interviews — показать все мои собеседования\n" +
+		"/cancel — отменить запланированное собеседование\n" +
+		"/match — подобрать время для собеседования, где я - кандидат\n" +
+		"/cancel — отменить запланированное собеседование\n"
+
+	if hr {
+		return common
+	}
+
+	return common +
+		"/create — создать собеседование\n" +
+		"/delete — удалить собеседование\n" +
+		"/addInterviewer — добавить интервьюера\n" +
+		"/delInterviewer — удалить интервьюера\n"
+
+}
 
 func (b *Bot) setupHandlers() {
 	manager := fsm.NewManager(
@@ -67,8 +78,8 @@ func (b *Bot) setupHandlers() {
 	manager.Bind("/cancel", initialState, b.startCancel)
 	manager.Bind(telebot.OnText, cancelReadIIDState, b.cancel)
 
-	manager.Bind("/join", initialState, b.joinTeam)
-	manager.Bind("/leave", initialState, b.leaveTeam)
+	manager.Bind("/addInterviewer", initialState, b.addInterviewer)
+	manager.Bind("/delInterviewer", initialState, b.delInterviewer)
 }
 
 func (b *Bot) setState(s fsm.Context, target fsm.State) {
@@ -94,12 +105,9 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err := b.repo.Users().Upsert(
-		b.ctx,
-		sender.Username,
-		&sender.ID,
-		nil,
-	)
+	isHR := b.checkHR(sender.Username)
+
+	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, nil)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "save user telegram id"))
 		return b.final(
@@ -110,7 +118,7 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 	}
 
 	b.setState(s, initialState)
-	return c.Send(USAGE)
+	return c.Send(usage(isHR))
 }
 
 func (b *Bot) startMatch(c telebot.Context, s fsm.Context) error {
@@ -215,7 +223,7 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 }
 
 func (b *Bot) tryAssign(candidate string, interviewer models.User, iid string, slot models.Meeting) (bool, bool) {
-	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSerializable)
+	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
 	defer cancel()
 
 	txn.Start(ctx)
@@ -298,6 +306,16 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 }
 
 func (b *Bot) startCreate(c telebot.Context, s fsm.Context) error {
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	isHR := b.checkHR(sender.Username)
+	if !isHR {
+		return b.denyNotHR(c, s)
+	}
+
 	b.setState(s, createReadInfoState)
 	return c.Send("Введите название вакансии")
 }
@@ -332,7 +350,7 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err = b.repo.Users().Upsert(b.ctx, tg, nil, nil)
+	err = b.repo.Users().Upsert(b.ctx, tg, nil, nil, nil)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "upsert user"))
 		return b.fail(c, s, err)
@@ -352,6 +370,16 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 }
 
 func (b *Bot) startDelete(c telebot.Context, s fsm.Context) error {
+	sender := c.Sender()
+	if sender == nil {
+		return b.fail(c, s, errors.Fail("get sender"))
+	}
+
+	isHR := b.checkHR(sender.Username)
+	if !isHR {
+		return b.denyNotHR(c, s)
+	}
+
 	b.setState(s, deleteReadIIDState)
 	return c.Send("Введите ID собеседования")
 }
@@ -384,7 +412,7 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSerializable)
+	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
 	defer cancel()
 
 	txn.Start(ctx)
@@ -422,15 +450,20 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 	return b.final(c, s, "Собеседование отменено")
 }
 
-func (b *Bot) joinTeam(c telebot.Context, s fsm.Context) error {
+func (b *Bot) addInterviewer(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	mark := true
+	isHR := b.checkHR(sender.Username)
+	if !isHR {
+		return b.denyNotHR(c, s)
+	}
 
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &mark)
+	cat, grade := models.EmployeeUser, 1
+
+	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &cat, &grade)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
@@ -438,18 +471,37 @@ func (b *Bot) joinTeam(c telebot.Context, s fsm.Context) error {
 	return b.final(c, s, "Теперь вы — интервьюер! Ждите собеседований ;)")
 }
 
-func (b *Bot) leaveTeam(c telebot.Context, s fsm.Context) error {
+func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
 	sender := c.Sender()
 	if sender == nil {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	mark := false
+	isHR := b.checkHR(sender.Username)
+	if !isHR {
+		return b.denyNotHR(c, s)
+	}
 
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &mark)
+	gradeDown := 0
+
+	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, &gradeDown)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
 
 	return b.final(c, s, "Вы больше не интервьюер (или им не были)")
+}
+
+func (b *Bot) denyNotHR(c telebot.Context, s fsm.Context) error {
+	return b.final(c, s, "Это может сделать только HR сотрудник")
+}
+
+func (b *Bot) checkHR(username string) bool {
+	user, err := b.repo.Users().Get(b.ctx, username)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "get user for checking HR permissions"))
+		return false
+	}
+
+	return user.Category >= models.HRUser
 }

@@ -25,7 +25,7 @@ func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error)
 
 	bot := &Bot{
 		bot:        b,
-		log:        logger,
+		log:        logger.With("bot"),
 		txm:        txn.NewManager(logger.With("txn"), repoClient),
 		repo: repoClient,
 	}
