@@ -974,9 +974,9 @@ func (m *MockusersApi) EXPECT() *MockusersApiMockRecorder {
 }
 
 // Assign mocks base method.
-func (m *MockusersApi) Assign(ctx context.Context, candidate, interviewer string, interview users.Interview, onSuccess func() error) (bool, error) {
+func (m *MockusersApi) Assign(ctx context.Context, candidate, interviewer string, interview users.Meeting, onSuccess func() error) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Assign", ctx, candidate, interviewer, interview, onSuccess)
+	ret := m.ctrl.Call(m, "Schedule", ctx, candidate, interviewer, interview, onSuccess)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -985,7 +985,7 @@ func (m *MockusersApi) Assign(ctx context.Context, candidate, interviewer string
 // Assign indicates an expected call of Assign.
 func (mr *MockusersApiMockRecorder) Assign(ctx, candidate, interviewer, interview, onSuccess any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Assign", reflect.TypeOf((*MockusersApi)(nil).Assign), ctx, candidate, interviewer, interview, onSuccess)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockusersApi)(nil).Assign), ctx, candidate, interviewer, interview, onSuccess)
 }
 
 // Free mocks base method.

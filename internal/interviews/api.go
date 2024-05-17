@@ -19,6 +19,7 @@ type API interface {
 	// Find checks whether an interview has been created or not
 	Find(ctx context.Context, id string) (*Interview, error)
 
+	// FindByUser returns all user's interviews
 	FindByUser(ctx context.Context, user string) ([]Interview, error)
 
 	// GetReadyAt returns list of interviews that have started and not finished at the given timestamp.

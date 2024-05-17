@@ -108,7 +108,7 @@ func Test_addInterval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotIdx, gotOk := addInterval(tt.args.intervals, tt.args.t)
+			gotIdx, gotOk := addMeeting(tt.args.intervals, tt.args.t)
 			require.Equal(t, tt.wantIdx, gotIdx)
 			require.Equal(t, tt.wantOk, gotOk)
 

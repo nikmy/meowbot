@@ -164,14 +164,12 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	}
 	left = left.UTC()
 
-	interval := [2]int64{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
+	meeting := users.Meeting{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
 
-	free, err := b.users.Match(b.ctx, interval)
+	free, err := b.users.Match(b.ctx, meeting)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Mathc request"))
 	}
-
-	interview := users.Interview{TimeSlot: interval}
 
 	sender := c.Sender()
 	if sender == nil {
@@ -179,11 +177,11 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	}
 
 	for len(free) > 0 {
-		assigned, err := b.users.Assign(b.ctx, sender.Username, free[0].Username, interview, func() error {
-			return b.interviews.Schedule(b.ctx, iid, free[0].Telegram, interval)
+		assigned, err := b.users.Schedule(b.ctx, sender.Username, free[0].Username, meeting, func() error {
+			return b.interviews.Schedule(b.ctx, iid, free[0].Telegram, meeting)
 		})
 		if err != nil {
-			b.log.Warn(errors.WrapFail(err, "assign interval to interviewer"))
+			b.log.Warn(errors.WrapFail(err, "assign interview to interviewer"))
 		}
 		if assigned {
 			break
@@ -365,6 +363,8 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		if i.CandidateTg == sender.ID {
 			side = interviews.RoleCandidate
 		}
+
+		b.users.Free(b.ctx, sender.Username, i.Interval)
 
 		return b.interviews.Cancel(b.ctx, iid, side)
 	})

@@ -3,8 +3,8 @@ package users
 import (
 	"context"
 	"slices"
+	"sort"
 
-	"github.com/nikmy/meowbot/internal/interviews"
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
@@ -65,17 +65,17 @@ func (r *repoAPI) Match(ctx context.Context, targetInterval [2]int64) ([]User, e
 		ctx,
 		repo.ByField("employee", true),
 		repo.Where(func(u User) bool {
-			_, canInsert := addInterval(getIntervals(u.Assigned), targetInterval)
+			_, canInsert := addMeeting(u.Meetings, targetInterval)
 			return canInsert
 		}),
 	)
 }
 
-func (r *repoAPI) Assign(
+func (r *repoAPI) Schedule(
 	ctx context.Context,
 	candidate string,
 	interviewer string,
-	interview Interview,
+	meeting Meeting,
 	onSuccess func() error,
 ) (bool, error) {
 	ok, err := r.repo.Txn(ctx, func() error {
@@ -89,14 +89,14 @@ func (r *repoAPI) Assign(
 			return errors.WrapFail(err, "get candidate")
 		}
 
-		ivIdx, assigned := addInterval(getIntervals(inter.Assigned), interview.TimeSlot)
-		if !assigned {
-			return errors.Fail("assign interval for interviewer")
+		ivIdx, scheduled := addMeeting(inter.Meetings, meeting)
+		if !scheduled {
+			return errors.Fail("schedule meeting for interviewer")
 		}
 
-		cdIdx, assigned := addInterval(getIntervals(cand.Assigned), interview.TimeSlot)
-		if !assigned {
-			return errors.Fail("assign interval for candidate")
+		cdIdx, scheduled := addMeeting(cand.Meetings, meeting)
+		if !scheduled {
+			return errors.Fail("schedule meeting for candidate")
 		}
 
 		err = r.repo.Update(
@@ -104,11 +104,9 @@ func (r *repoAPI) Assign(
 			func(u *User) {
 				switch u.Username {
 				case interviewer:
-					interview.Role = interviews.RoleInterviewer
-					u.Assigned = slices.Insert(u.Assigned, ivIdx, interview)
+					u.Meetings = slices.Insert(u.Meetings, ivIdx, meeting)
 				case candidate:
-					interview.Role = interviews.RoleCandidate
-					u.Assigned = slices.Insert(u.Assigned, cdIdx, interview)
+					u.Meetings = slices.Insert(u.Meetings, cdIdx, meeting)
 				}
 			},
 			repo.Where(func(user User) bool {
@@ -128,52 +126,41 @@ func (r *repoAPI) Assign(
 	if err == nil && !ok {
 		err = errors.Error("transaction aborted")
 	}
-	return ok, errors.WrapFail(err, "assign interval to user")
+	return ok, errors.WrapFail(err, "schedule meeting to user")
 }
 
 func (r *repoAPI) Free(
 	ctx context.Context,
-	interviewer User,
+	interviewer string,
 	interval [2]int64,
-	onSuccess func() error,
 ) error {
-	panic("TODO")
-	//err := r.repo.Txn(ctx, func() error {
-	//	user, err := r.Get(ctx, interviewer.Username)
-	//	if err != nil {
-	//		return errors.WrapFail(err, "get interviewer")
-	//	}
-	//
-	//	idx := sort.Search(len(user.Intervals), func(i int) bool {
-	//		return user.Intervals[i][0] == interval[0]
-	//	})
-	//	if idx == len(user.Intervals) {
-	//		return errors.Error("no intervals with specified start")
-	//	}
-	//
-	//	if user.Intervals[idx][1] != interval[1] {
-	//		return errors.Error("no intervals with specified end")
-	//	}
-	//
-	//	intervals := slices.Delete(user.Intervals, idx, idx+1)
-	//
-	//	err = r.repo.Update(
-	//		ctx,
-	//		func(u User) User {
-	//			u.Intervals = intervals
-	//			return u
-	//		},
-	//		repo.ByField("username", interviewer.Username),
-	//	)
-	//	if err != nil {
-	//		return errors.WrapFail(err, "update user intervals")
-	//	}
-	//
-	//	if onSuccess != nil {
-	//		return onSuccess()
-	//	}
-	//	return nil
-	//})
-	//
-	//return errors.WrapFail(err, "free interval for user")
+	user, err := r.Get(ctx, interviewer)
+	if err != nil {
+		return errors.WrapFail(err, "get interviewer")
+	}
+
+	idx := sort.Search(len(user.Meetings), func(i int) bool {
+		return user.Meetings[i][0] == interval[0]
+	})
+	if idx == len(user.Meetings) {
+		return errors.Error("no intervals with specified start")
+	}
+
+	if user.Meetings[idx][1] != interval[1] {
+		return errors.Error("no intervals with specified end")
+	}
+
+	updated := slices.Delete(user.Meetings, idx, idx+1)
+	err = r.repo.Update(
+		ctx,
+		func(u *User) {
+			u.Meetings = updated
+		},
+		repo.ByField("username", interviewer),
+	)
+	if err != nil {
+		return errors.WrapFail(err, "update user intervals")
+	}
+
+	return nil
 }
