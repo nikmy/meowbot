@@ -11,8 +11,7 @@ import (
 	"github.com/vitaliy-ukiru/fsm-telebot/storages/memory"
 	"gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/interviews"
-	"github.com/nikmy/meowbot/internal/users"
+	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
@@ -96,10 +95,8 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 	err := b.users.Upsert(
 		b.ctx,
 		sender.Username,
-		users.UserDiff{
-			Telegram: &sender.ID,
-			Username: &sender.Username,
-		},
+		&sender.ID,
+		nil,
 	)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "save user telegram id"))
@@ -164,7 +161,20 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	}
 	left = left.UTC()
 
-	meeting := users.Meeting{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
+	meeting := models.Meeting{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
+
+	i, err := b.interviews.Find(b.ctx, iid)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "find interview to match"))
+	}
+
+	if i == nil {
+		return b.final(c, s, "Такого собеседования нет")
+	}
+
+	if i.Interval != nil {
+		return b.final(c, s, fmt.Sprintf("Собеседование уже назначено на %s", time.UnixMilli(i.Interval[0])))
+	}
 
 	free, err := b.users.Match(b.ctx, meeting)
 	if err != nil {
@@ -176,17 +186,26 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	for len(free) > 0 {
-		assigned, err := b.users.Schedule(b.ctx, sender.Username, free[0].Username, meeting, func() error {
-			return b.interviews.Schedule(b.ctx, iid, free[0].Telegram, meeting)
-		})
+	assigned := false
+	for !assigned && len(free) > 0 {
+		// TODO: txn
+		assigned, err = b.users.Schedule(b.ctx, free[0].Username, meeting)
 		if err != nil {
 			b.log.Warn(errors.WrapFail(err, "assign interview to interviewer"))
+			continue
 		}
-		if assigned {
-			break
+
+		if !assigned {
+			free = free[1:]
+			continue
 		}
-		free = free[1:]
+
+		err = b.interviews.Schedule(b.ctx, iid, free[0].Telegram, meeting)
+		if err != nil {
+			b.log.Warn(errors.WrapFail(err, "schedule interview"))
+			assigned = false
+			continue
+		}
 	}
 
 	if len(free) == 0 {
@@ -212,7 +231,7 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	assigned, err := b.interviews.FindByUser(b.ctx, sender.Username)
+	assigned, err := b.interviews.FindByUser(b.ctx, sender.ID)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "find by candidate"))
 	}
@@ -221,7 +240,7 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "У вас нет назначенных собеседований")
 	}
 
-	slices.SortFunc(assigned, func(a, b interviews.Interview) int {
+	slices.SortFunc(assigned, func(a, b models.Interview) int {
 		return cmp.Or(
 			cmp.Compare(a.Interval[0], b.Interval[0]),
 			cmp.Compare(a.Interval[1], b.Interval[1]),
@@ -247,16 +266,12 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		}
 		sb.WriteString("): ")
 
-		if i.Interval[0] == 0 {
+		if i.Interval == nil {
 			sb.WriteString("не запланировано;\n")
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf(
-			"%s — %s;\n",
-			time.UnixMilli(i.Interval[0]).Format(time.DateTime),
-			time.UnixMilli(i.Interval[1]).Format(time.DateTime),
-		))
+		sb.WriteString(fmt.Sprintf("%s;\n", time.UnixMilli(i.Interval[0]).Format(time.DateTime)))
 	}
 
 	return b.final(c, s, sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
@@ -297,7 +312,7 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err = b.users.Upsert(b.ctx, tg, users.UserDiff{Username: &tg})
+	err = b.users.Upsert(b.ctx, tg, nil, nil)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "upsert user"))
 		return b.fail(c, s, err)
@@ -349,31 +364,40 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	ok, err := b.interviews.Txn(b.ctx, func() error {
-		i, err := b.interviews.Find(b.ctx, iid)
-		if err != nil {
-			return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
-		}
-
-		if i == nil {
-			return b.final(c, s, "Собеседование не найдено")
-		}
-
-		side := interviews.RoleInterviewer
-		if i.CandidateTg == sender.ID {
-			side = interviews.RoleCandidate
-		}
-
-		b.users.Free(b.ctx, sender.Username, i.Interval)
-
-		return b.interviews.Cancel(b.ctx, iid, side)
-	})
+	// TODO: txn
+	i, err := b.interviews.Find(b.ctx, iid)
 	if err != nil {
-		return b.fail(c, s, errors.WrapFail(err, "perform cancel txn"))
+		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
 	}
-	if !ok {
-		return b.fail(c, s, errors.Error("interview cancellation has been aborted"))
+
+	if i == nil {
+		return b.final(c, s, "Собеседование не найдено")
 	}
+
+	if i.Interval == nil {
+		return b.final(c, s, "Собеседование не запланировано")
+	}
+
+	side := models.RoleInterviewer
+	if i.CandidateTg == sender.ID {
+		side = models.RoleCandidate
+	}
+
+	err = b.users.Free(b.ctx, sender.Username, *i.Interval)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "do Users.Free request"))
+	}
+
+	err = b.interviews.Cancel(b.ctx, iid, side)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Cancel request"))
+	}
+	//if err != nil {
+	//	return b.fail(c, s, errors.WrapFail(err, "perform cancel txn"))
+	//}
+	//if !ok {
+	//	return b.fail(c, s, errors.Error("interview cancellation has been aborted"))
+	//}
 
 	return b.final(c, s, "Собеседование отменено")
 }
@@ -386,7 +410,7 @@ func (b *Bot) joinTeam(c telebot.Context, s fsm.Context) error {
 
 	mark := true
 
-	err := b.users.Upsert(b.ctx, sender.Username, users.UserDiff{Employee: &mark})
+	err := b.users.Upsert(b.ctx, sender.Username, &sender.ID, &mark)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
@@ -402,7 +426,7 @@ func (b *Bot) leaveTeam(c telebot.Context, s fsm.Context) error {
 
 	mark := false
 
-	err := b.users.Upsert(b.ctx, sender.Username, users.UserDiff{Employee: &mark})
+	err := b.users.Upsert(b.ctx, sender.Username, &sender.ID, &mark)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}

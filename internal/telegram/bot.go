@@ -6,16 +6,15 @@ import (
 
 	"gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/interviews"
-	"github.com/nikmy/meowbot/internal/users"
+	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
 func New(
 	logger logger.Logger,
 	cfg Config,
-	interviews interviews.API,
-	users users.API,
+	interviews models.InterviewsRepo,
+	users models.UsersRepo,
 ) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   cfg.Token,
@@ -46,8 +45,8 @@ type Bot struct {
 	ctx context.Context
 	log logger.Logger
 
-	users      users.API
-	interviews interviews.API
+	users      models.UsersRepo
+	interviews models.InterviewsRepo
 
 	notifyBefore []int64
 	notifyPeriod time.Duration

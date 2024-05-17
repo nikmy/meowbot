@@ -4,10 +4,6 @@ import (
 	"time"
 )
 
-type Config struct {
-	MongoCfg *MongoConfig `yaml:"mongo"`
-}
-
 type DataSource string
 
 type MongoConfig struct {

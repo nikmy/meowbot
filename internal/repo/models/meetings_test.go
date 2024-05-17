@@ -1,4 +1,4 @@
-package users
+package models
 
 import (
 	"slices"
@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_addInterval(t *testing.T) {
+func TestUser_AddMeeting(t *testing.T) {
 	type args struct {
-		intervals [][2]int64
-		t         [2]int64
+		intervals []Meeting
+		t         Meeting
 	}
 
 	type testcase struct {
@@ -34,7 +34,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "add to the end",
 			args: args{
-				intervals: [][2]int64{{0, 2}, {2, 3}},
+				intervals: []Meeting{{0, 2}, {2, 3}},
 				t:         [2]int64{3, 4},
 			},
 			wantIdx: 2,
@@ -43,7 +43,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "add to the middle",
 			args: args{
-				intervals: [][2]int64{{0, 2}, {2, 3}, {4, 5}},
+				intervals: []Meeting{{0, 2}, {2, 3}, {4, 5}},
 				t:         [2]int64{3, 4},
 			},
 			wantIdx: 2,
@@ -52,7 +52,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "add to the beginning",
 			args: args{
-				intervals: [][2]int64{{2, 3}, {3, 4}},
+				intervals: []Meeting{{2, 3}, {3, 4}},
 				t:         [2]int64{0, 1},
 			},
 			wantIdx: 0,
@@ -61,7 +61,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "overlap first",
 			args: args{
-				intervals: [][2]int64{{2, 3}, {3, 4}},
+				intervals: []Meeting{{2, 3}, {3, 4}},
 				t:         [2]int64{0, 3},
 			},
 			wantIdx: 0,
@@ -71,7 +71,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "overlap last",
 			args: args{
-				intervals: [][2]int64{{2, 3}, {3, 5}},
+				intervals: []Meeting{{2, 3}, {3, 5}},
 				t:         [2]int64{4, 6},
 			},
 			wantIdx: 2,
@@ -80,7 +80,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "no space intersect one",
 			args: args{
-				intervals: [][2]int64{{0, 2}, {2, 3}},
+				intervals: []Meeting{{0, 2}, {2, 3}},
 				t:         [2]int64{1, 2},
 			},
 			wantIdx: 1,
@@ -89,7 +89,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "no space intersect two",
 			args: args{
-				intervals: [][2]int64{{0, 2}, {2, 3}},
+				intervals: []Meeting{{0, 2}, {2, 3}},
 				t:         [2]int64{1, 2},
 			},
 			wantIdx: 1,
@@ -98,7 +98,7 @@ func Test_addInterval(t *testing.T) {
 		{
 			name: "no space intersect many",
 			args: args{
-				intervals: [][2]int64{{0, 1}, {1, 2}, {2, 3}, {4, 6}},
+				intervals: []Meeting{{0, 1}, {1, 2}, {2, 3}, {4, 6}},
 				t:         [2]int64{1, 8},
 			},
 			wantIdx: 1,
@@ -108,13 +108,15 @@ func Test_addInterval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotIdx, gotOk := addMeeting(tt.args.intervals, tt.args.t)
+			u := User{Meetings: tt.args.intervals}
+			gotIdx, gotOk := u.AddMeeting(tt.args.t)
 			require.Equal(t, tt.wantIdx, gotIdx)
 			require.Equal(t, tt.wantOk, gotOk)
 
 			require.NotPanics(t, func() {
-				tt.args.intervals = slices.Insert(tt.args.intervals, gotIdx, tt.args.t)
+				_ = slices.Insert(u.Meetings, gotIdx, tt.args.t)
 			})
 		})
 	}
 }
+

@@ -8,8 +8,7 @@ import (
 
 	"gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/interviews"
-	"github.com/nikmy/meowbot/internal/users"
+	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
@@ -31,7 +30,7 @@ func (b *Bot) runNotifier() {
 }
 
 func (b *Bot) notify(userID int64, msg string) error {
-	_, err := b.bot.Send(users.User{Telegram: userID}, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
+	_, err := b.bot.Send(models.User{Telegram: userID}, msg, &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
 	return err
 }
 
@@ -53,8 +52,8 @@ func (b *Bot) watch() {
 }
 
 type notification struct {
-	Interview  interviews.Interview
-	Recipients []interviews.Role
+	Interview  models.Interview
+	Recipients []models.Role
 	NotifyTime int64
 	LeftTime   time.Duration
 }
@@ -80,14 +79,12 @@ func (b *Bot) sendNeededNotifications() error {
 
 func (b *Bot) sendAllNotifications(ns []notification) {
 	for _, n := range ns {
-		var notified []interviews.Role
-
 		for _, role := range n.Recipients {
 			tgID := int64(0)
 			switch role {
-			case interviews.RoleInterviewer:
+			case models.RoleInterviewer:
 				tgID = n.Interview.InterviewerTg
-			case interviews.RoleCandidate:
+			case models.RoleCandidate:
 				tgID = n.Interview.CandidateTg
 			}
 
@@ -96,30 +93,25 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 				n.Interview.ID, n.Interview.Vacancy, n.LeftTime,
 			)
 
+			// TODO: txn
 			err := b.notify(tgID, msg)
 			if err != nil {
 				b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
 				continue
 			}
 
-			notified = append(notified, role)
-		}
-
-		if len(notified) == 0 {
-			continue
-		}
-
-		err := b.interviews.Notify(b.ctx, n.Interview.ID, n.NotifyTime, notified)
-		if err != nil {
-			b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
+			err = b.interviews.Notify(b.ctx, n.Interview.ID, n.NotifyTime, role)
+			if err != nil {
+				b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
+			}
 		}
 	}
 }
 
-func (b *Bot) getNeededNotifications(now int64, upcoming []interviews.Interview) []notification {
+func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []notification {
 	needed := make([]notification, 0, len(upcoming))
 
-	both := []interviews.Role{interviews.RoleInterviewer, interviews.RoleCandidate}
+	both := []models.Role{models.RoleInterviewer, models.RoleCandidate}
 
 	for _, i := range upcoming {
 		left := i.Interval[0] - now
@@ -162,7 +154,7 @@ func (b *Bot) getNeededNotifications(now int64, upcoming []interviews.Interview)
 		}
 
 		// check if last time both sides were notified
-		if last.Notified[interviews.RoleCandidate] {
+		if last.Notified[models.RoleCandidate] {
 			continue
 		}
 
