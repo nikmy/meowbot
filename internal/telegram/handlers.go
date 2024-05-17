@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
+	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
@@ -186,26 +188,13 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	assigned := false
-	for !assigned && len(free) > 0 {
-		// TODO: txn
-		assigned, err = b.repo.Users().Schedule(b.ctx, free[0].Username, meeting)
-		if err != nil {
-			b.log.Warn(errors.WrapFail(err, "assign interview to interviewer"))
-			continue
-		}
+	assigned, candFree := false, true
+	for candFree && !assigned && len(free) > 0 {
+		assigned, candFree = b.tryAssign(sender.Username, free[0], iid, meeting)
+	}
 
-		if !assigned {
-			free = free[1:]
-			continue
-		}
-
-		err = b.repo.Interviews().Schedule(b.ctx, iid, free[0].Telegram, meeting)
-		if err != nil {
-			b.log.Warn(errors.WrapFail(err, "schedule interview"))
-			assigned = false
-			continue
-		}
+	if !candFree {
+		return b.final(c, s, "В это время вы заняты")
 	}
 
 	if len(free) == 0 {
@@ -223,6 +212,37 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	}
 
 	return b.final(c, s, msg)
+}
+
+func (b *Bot) tryAssign(candidate string, interviewer models.User, iid string, slot models.Meeting) (bool, bool) {
+	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSerializable)
+	defer cancel()
+
+	txn.Start(ctx)
+
+	scheduled, err := b.repo.Users().Schedule(ctx, candidate, slot)
+	if err != nil || !scheduled {
+		b.log.Warn(errors.WrapFail(err, "schedule interview for candidate"))
+		return false, false
+	}
+
+	assigned, err := b.repo.Users().Schedule(ctx, interviewer.Username, slot)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "assign interview to interviewer"))
+		return false, true
+	}
+
+	if !assigned {
+		return false, true
+	}
+
+	err = b.repo.Interviews().Schedule(ctx, iid, interviewer.Telegram, slot)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "schedule interview"))
+		return false, true
+	}
+
+	return true, true
 }
 
 func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
@@ -364,7 +384,11 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	// TODO: txn
+	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSerializable)
+	defer cancel()
+
+	txn.Start(ctx)
+
 	i, err := b.repo.Interviews().Find(b.ctx, iid)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
@@ -392,12 +416,8 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Cancel request"))
 	}
-	//if err != nil {
-	//	return b.fail(c, s, errors.WrapFail(err, "perform cancel txn"))
-	//}
-	//if !ok {
-	//	return b.fail(c, s, errors.Error("interview cancellation has been aborted"))
-	//}
+
+	txn.Commit(ctx)
 
 	return b.final(c, s, "Собеседование отменено")
 }

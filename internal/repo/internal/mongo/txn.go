@@ -16,16 +16,20 @@ func (m *mongoClient) Make(lvl txn.Model) txn.Txn {
 	return &mongoTxn{lvl: lvl, c: m.c}
 }
 
-
 type mongoTxn struct {
 	lvl txn.Model
 	c *mongo.Client
 	s mongo.Session
-	sc mongo.SessionContext
+	sc       mongo.SessionContext
+	finished bool
 }
 
 func (m *mongoTxn) Close(ctx context.Context) error {
-	m.s.EndSession(ctx)
+	defer m.s.EndSession(ctx)
+	if !m.finished {
+		return m.Abort(ctx)
+	}
+
 	return nil
 }
 
@@ -58,10 +62,12 @@ func (m *mongoTxn) Start(ctx context.Context) error {
 
 func (m *mongoTxn) Abort(ctx context.Context) error {
 	defer m.s.EndSession(ctx)
+	m.finished = true
 	return m.sc.AbortTransaction(ctx)
 }
 
 func (m *mongoTxn) Commit(ctx context.Context) error {
 	defer m.s.EndSession(ctx)
+	m.finished = true
 	return m.sc.CommitTransaction(ctx)
 }

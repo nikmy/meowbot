@@ -39,8 +39,9 @@ type Interview struct {
 
 	Vacancy string `json:"vacancy"     bson:"vacancy"`
 	Data    []byte `json:"data"        bson:"data"`
+	Zoom    string `json:"zoom"        bson:"zoom"`
 
-	Interval *[2]int64        `json:"interval" bson:"interval"`
+	Interval *[2]int64       `json:"interval" bson:"interval"`
 	Status   InterviewStatus `json:"status"    bson:"status"`
 
 	CancelledBy Role `json:"cancelled_by" bson:"cancelled_by"`
@@ -64,7 +65,6 @@ type NotificationLog struct {
 	UnixTime int64   `json:"unix_time" bson:"unix_time"`
 	Notified [2]bool `json:"notified" bson:"notified"`
 }
-
 
 const (
 	NotificationFieldUnixTime = "unix_time"

@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"slices"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
+	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
@@ -88,23 +90,37 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 				tgID = n.Interview.CandidateTg
 			}
 
-			msg := fmt.Sprintf(
-				"До собеседования `%s` на должность \"%s\" осталось %s",
-				n.Interview.ID, n.Interview.Vacancy, n.LeftTime,
-			)
-
-			// TODO: txn
-			err := b.notify(tgID, msg)
-			if err != nil {
-				b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
-				continue
-			}
-
-			err = b.repo.Interviews().Notify(b.ctx, n.Interview.ID, n.NotifyTime, role)
-			if err != nil {
-				b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
-			}
+			b.sendOneNotification(tgID, n, role)
 		}
+	}
+}
+
+func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) {
+	var msg string
+	if n.LeftTime == 0 {
+		msg = fmt.Sprintf(
+			"Собеседование %s вот-вот начнётся! Подключиться можно по ссылке %s\nУдачи!",
+			n.Interview.ID, n.Interview.Zoom,
+		)
+	} else {
+		msg = fmt.Sprintf(
+			"До собеседования `%s` на должность \"%s\" осталось %s",
+			n.Interview.ID, n.Interview.Vacancy, n.LeftTime,
+		)
+	}
+
+	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSerializable)
+	defer cancel()
+
+	err := b.notify(tgID, msg)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
+		return
+	}
+
+	err = b.repo.Interviews().Notify(ctx, n.Interview.ID, n.NotifyTime, role)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
 	}
 }
 

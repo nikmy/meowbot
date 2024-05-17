@@ -6,7 +6,6 @@ type Txn interface {
 	Start(ctx context.Context) error
 	Abort(ctx context.Context) error
 	Commit(ctx context.Context) error
-
 	Close(ctx context.Context) error
 }
 
