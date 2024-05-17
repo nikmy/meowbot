@@ -24,9 +24,9 @@ func (u mongoUsers) Upsert(
 	telegramID *int64,
 	category *models.UserCategory,
 	intGrade *int,
-) error {
+) (*models.User, error) {
 	upsert := true
-	_, err := u.coll.UpdateOne(
+	r := u.coll.FindOneAndUpdate(
 		ctx,
 		mongotools.Field(models.UserFieldUsername, &username),
 		mongotools.SetAll(
@@ -34,10 +34,25 @@ func (u mongoUsers) Upsert(
 			mongotools.Field(models.UserFieldCategory, category),
 			mongotools.Field(models.UserFieldIntGrade, &intGrade),
 		),
-		&options.UpdateOptions{Upsert: &upsert},
+		&options.FindOneAndUpdateOptions{Upsert: &upsert},
 	)
 
-	return errors.WrapFail(err, "do upsert")
+	err := r.Err()
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, errors.WrapFail(err, "do upsert")
+	}
+
+	var parsed models.User
+	err = r.Decode(&parsed)
+	if err != nil {
+		return nil, errors.WrapFail(err, "parse user")
+	}
+
+	return &parsed, nil
 }
 
 func (u mongoUsers) Get(ctx context.Context, username string) (*models.User, error) {

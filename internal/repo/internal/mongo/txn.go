@@ -27,7 +27,7 @@ type mongoTxn struct {
 func (m *mongoTxn) Close(ctx context.Context) error {
 	defer m.s.EndSession(ctx)
 	if !m.finished {
-		return m.Abort(ctx)
+		return m.sc.AbortTransaction(ctx)
 	}
 
 	return nil

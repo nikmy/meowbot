@@ -112,6 +112,8 @@ func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) 
 	ctx, cancel := b.txm.NewContext(context.Background(), txn.ModelSnapshotIsolation)
 	defer cancel()
 
+	txn.Start(ctx)
+
 	err := b.notify(tgID, msg)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
@@ -122,6 +124,8 @@ func (b *Bot) sendOneNotification(tgID int64, n notification, role models.Role) 
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
 	}
+
+	txn.Commit(ctx)
 }
 
 func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []notification {

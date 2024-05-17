@@ -35,7 +35,6 @@ func usage(hr bool) string {
 	const common = "" +
 		"Доступные команды:\n" +
 		"/show_interviews — показать все мои собеседования\n" +
-		"/cancel — отменить запланированное собеседование\n" +
 		"/match — подобрать время для собеседования, где я - кандидат\n" +
 		"/cancel — отменить запланированное собеседование\n"
 
@@ -48,7 +47,6 @@ func usage(hr bool) string {
 		"/delete — удалить собеседование\n" +
 		"/addInterviewer — добавить интервьюера\n" +
 		"/delInterviewer — удалить интервьюера\n"
-
 }
 
 func (b *Bot) setupHandlers() {
@@ -68,15 +66,15 @@ func (b *Bot) setupHandlers() {
 	manager.Bind(telebot.OnText, matchReadIIDState, b.matchReadIID)
 	manager.Bind(telebot.OnText, matchReadIntervalState, b.match)
 
+	manager.Bind("/cancel", initialState, b.startCancel)
+	manager.Bind(telebot.OnText, cancelReadIIDState, b.cancel)
+
 	manager.Bind("/create", initialState, b.startCreate)
 	manager.Bind(telebot.OnText, createReadInfoState, b.createReadInfo)
 	manager.Bind(telebot.OnText, createReadCTgState, b.createReadCandidate)
 
 	manager.Bind("/delete", initialState, b.startDelete)
 	manager.Bind(telebot.OnText, deleteReadIIDState, b.delete)
-
-	manager.Bind("/cancel", initialState, b.startCancel)
-	manager.Bind(telebot.OnText, cancelReadIIDState, b.cancel)
 
 	manager.Bind("/addInterviewer", initialState, b.addInterviewer)
 	manager.Bind("/delInterviewer", initialState, b.delInterviewer)
@@ -105,11 +103,9 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	isHR := b.checkHR(sender.Username)
-
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, nil)
+	known, err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, nil)
 	if err != nil {
-		b.log.Error(errors.WrapFail(err, "save user telegram id"))
+		b.log.Error(errors.WrapFail(err, "upsert user on start"))
 		return b.final(
 			c, s,
 			"Ошибка. Если вы используете бота в первый раз, "+
@@ -118,7 +114,7 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 	}
 
 	b.setState(s, initialState)
-	return c.Send(usage(isHR))
+	return c.Send(usage(known.Category == models.HRUser))
 }
 
 func (b *Bot) startMatch(c telebot.Context, s fsm.Context) error {
@@ -250,6 +246,8 @@ func (b *Bot) tryAssign(candidate string, interviewer models.User, iid string, s
 		return false, true
 	}
 
+	txn.Commit(ctx)
+
 	return true, true
 }
 
@@ -269,6 +267,12 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 	}
 
 	slices.SortFunc(assigned, func(a, b models.Interview) int {
+		if a.Interval == nil {
+			return -1
+		}
+		if b.Interval == nil {
+			return 1
+		}
 		return cmp.Or(
 			cmp.Compare(a.Interval[0], b.Interval[0]),
 			cmp.Compare(a.Interval[1], b.Interval[1]),
@@ -350,13 +354,13 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err = b.repo.Users().Upsert(b.ctx, tg, nil, nil, nil)
+	_, err = b.repo.Users().Upsert(b.ctx, tg, nil, nil, nil)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "upsert user"))
 		return b.fail(c, s, err)
 	}
 
-	id, err := b.repo.Interviews().Create(b.ctx, vac, sender.ID)
+	id, err := b.repo.Interviews().Create(b.ctx, vac, tg)
 	if err != nil {
 		b.log.Error(err)
 		return b.fail(c, s, errors.WrapFail(err, "create interview"))
@@ -445,6 +449,19 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Cancel request"))
 	}
 
+	switch side {
+	case models.RoleInterviewer:
+		err = b.notify(i.CandidateTg, fmt.Sprintf("Интервьюер отменил собеседование `%s`", i.ID))
+		err = errors.WrapFail(err, "notify candidate about cancel")
+	case models.RoleCandidate:
+		err = b.notify(i.InterviewerTg, fmt.Sprintf("Кандидат отменил собеседование `%s`", i.ID))
+		err = errors.WrapFail(err, "notify candidate about cancel")
+	}
+
+	if err != nil {
+		return b.fail(c, s, err)
+	}
+
 	txn.Commit(ctx)
 
 	return b.final(c, s, "Собеседование отменено")
@@ -463,12 +480,16 @@ func (b *Bot) addInterviewer(c telebot.Context, s fsm.Context) error {
 
 	cat, grade := models.EmployeeUser, 1
 
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &cat, &grade)
+	old, err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &cat, &grade)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
 
-	return b.final(c, s, "Теперь вы — интервьюер! Ждите собеседований ;)")
+	if old.IntGrade > models.GradeNotInterviewer {
+		return b.final(c, s, fmt.Sprintf("@%s уже интервьюер", old.Username))
+	}
+
+	return b.final(c, s, fmt.Sprintf("Теперь @%s — интервьюер", old.Username))
 }
 
 func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
@@ -484,12 +505,16 @@ func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
 
 	gradeDown := 0
 
-	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, &gradeDown)
+	old, err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, nil, &gradeDown)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
 
-	return b.final(c, s, "Вы больше не интервьюер (или им не были)")
+	if old.IntGrade == models.GradeNotInterviewer {
+		return b.final(c, s, fmt.Sprintf("@%s уже не интервьюер", old.Username))
+	}
+
+	return b.final(c, s, fmt.Sprintf("@%s больше не интервьюер", old.Username))
 }
 
 func (b *Bot) denyNotHR(c telebot.Context, s fsm.Context) error {

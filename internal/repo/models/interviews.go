@@ -4,7 +4,7 @@ import "context"
 
 type InterviewsRepo interface {
 	// Create is API method for registering an interview. Data may contain confidential information.
-	Create(ctx context.Context, vacancy string, candidateTg int64) (id string, err error)
+	Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error)
 
 	// Delete completely removes interview object
 	Delete(ctx context.Context, id string) (found bool, err error)
@@ -33,32 +33,34 @@ type InterviewsRepo interface {
 }
 
 type Interview struct {
-	ID            string `json:"id"          bson:"_id,omitempty"`
-	InterviewerTg int64  `json:"interviewer" bson:"interviewer"`
-	CandidateTg   int64  `json:"candidate"   bson:"candidate"`
+	ID        string `json:"id"          bson:"_id,omitempty"`
+	Candidate string `json:"candidate"   bson:"candidate"`
+	Vacancy   string `json:"vacancy"     bson:"vacancy"`
 
-	Vacancy string `json:"vacancy"     bson:"vacancy"`
-	Data    []byte `json:"data"        bson:"data"`
-	Zoom    string `json:"zoom"        bson:"zoom"`
+	InterviewerTg int64 `json:"interviewer_tg" bson:"interviewe_ygr"`
+	CandidateTg   int64 `json:"candidate_tg"   bson:"candidate_tg"`
 
-	Interval *[2]int64       `json:"interval" bson:"interval"`
-	Status   InterviewStatus `json:"status"    bson:"status"`
+	Data []byte `json:"data"        bson:"data"`
+	Zoom string `json:"zoom"        bson:"zoom"`
 
-	CancelledBy Role `json:"cancelled_by" bson:"cancelled_by"`
+	Status      InterviewStatus `json:"status"    bson:"status"`
+	Interval    *[2]int64       `json:"interval" bson:"interval"`
+	CancelledBy Role            `json:"cancelled_by" bson:"cancelled_by"`
 
-	LastNotification *NotificationLog `json:"last_notifications" bson:"last_notifications"`
+	LastNotification *NotificationLog `json:"last_notification" bson:"last_notification"`
 }
 
 const (
 	InterviewFieldID               = "id"
-	InterviewFieldInterviewerTg    = "interviewer"
-	InterviewFieldCandidateTg      = "candidate"
+	InterviewFieldCandidate        = "candidate"
+	InterviewFieldInterviewerTg    = "interviewer_tg"
+	InterviewFieldCandidateTg      = "candidate_tg"
 	InterviewFieldVacancy          = "vacancy"
 	InterviewFieldData             = "data"
 	InterviewFieldInterval         = "interval"
 	InterviewFieldStatus           = "status"
 	InterviewFieldCancelledBy      = "cancelled_by"
-	InterviewFieldLastNotification = "last_notifications"
+	InterviewFieldLastNotification = "last_notification"
 )
 
 type NotificationLog struct {
@@ -82,7 +84,7 @@ const (
 
 const (
 	// InterviewStatusNew is set when interview has been created
-	InterviewStatusNew = InterviewStatus(iota) + 1
+	InterviewStatusNew = InterviewStatus(iota)
 
 	// InterviewStatusScheduled is set when its tine is known
 	InterviewStatusScheduled

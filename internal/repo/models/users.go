@@ -6,7 +6,7 @@ import (
 )
 
 type UsersRepo interface {
-	Upsert(ctx context.Context, username string, telegramID *int64, category *UserCategory, intGrade *int) error
+	Upsert(ctx context.Context, username string, telegramID *int64, category *UserCategory, intGrade *int) (*User, error)
 	Get(ctx context.Context, username string) (*User, error)
 
 	Match(ctx context.Context, targetInterval [2]int64) ([]User, error)

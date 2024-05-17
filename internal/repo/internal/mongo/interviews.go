@@ -2,7 +2,6 @@ package repo
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -21,17 +20,17 @@ type mongoInterviews struct {
 	coll *mongo.Collection
 }
 
-func (m mongoInterviews) Create(ctx context.Context, vacancy string, candidateTg int64) (id string, err error) {
+func (m mongoInterviews) Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error) {
 	randomSuffix := strconv.Itoa(rand.Intn(90) + 10)
 	timestamp := strconv.FormatInt(time.Now().UTC().UnixMicro(), 16)
-	id = base64.StdEncoding.EncodeToString([]byte(timestamp + randomSuffix))
+	id = timestamp + randomSuffix
 
 	r, err := m.coll.InsertOne(
 		ctx,
 		bson.M{
 			"_id":                            id,
 			models.InterviewFieldVacancy:     vacancy,
-			models.InterviewFieldCandidateTg: candidateTg,
+			models.InterviewFieldCandidate: candidateTg,
 		},
 	)
 	if err != nil {
@@ -161,6 +160,7 @@ func (m mongoInterviews) Cancel(ctx context.Context, id string, side models.Role
 			models.InterviewFieldStatus:      models.InterviewStatusCancelled,
 			models.InterviewFieldCancelledBy: side,
 			models.InterviewFieldInterval:    [2]int{},
+			models.InterviewFieldLastNotification: nil,
 		},
 	)
 	if err != nil {

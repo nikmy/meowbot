@@ -99,7 +99,7 @@ func (s *server) handleUpsertEmployee(c *fiber.Ctx) error {
 		cat = models.HRUser
 	}
 
-	err = s.repo.Users().Upsert(c.Context(), req.TG, nil, &cat, nil)
+	_, err = s.repo.Users().Upsert(c.Context(), req.TG, nil, &cat, nil)
 	if err != nil {
 		return errors.WrapFail(err, "do Users.Upsert request")
 	}
