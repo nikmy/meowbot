@@ -9,14 +9,14 @@ import (
 	"go.uber.org/mock/gomock"
 	"gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/interviews"
+	"github.com/nikmy/meowbot/internal/repo/models"
 )
 
 func TestBot_showInterviews(t *testing.T) {
 	type mocks struct {
 		sender *telebot.User
 
-		interviews []interviews.Interview
+		interviews []models.Interview
 		iErr       error
 
 		c telebot.Context
@@ -58,7 +58,7 @@ func TestBot_showInterviews(t *testing.T) {
 			name: "have assigned interviews",
 			mock: mocks{
 				sender:     &telebot.User{Username: "test"},
-				interviews: []interviews.Interview{{}, {}},
+				interviews: []models.Interview{{}, {}},
 			},
 			want: want{fail: false},
 		},

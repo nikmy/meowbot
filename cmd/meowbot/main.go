@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"github.com/nikmy/meowbot/internal/interviews"
-	"github.com/nikmy/meowbot/internal/users"
 	stdlog "log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/internal/telegram"
 	"github.com/nikmy/meowbot/pkg/errors"
 	"github.com/nikmy/meowbot/pkg/logger"
@@ -30,17 +29,12 @@ func main() {
 
 	db := cfg.Database
 
-	interviewsRepo, err := interviews.New(ctx, log, db.Storage, db.Sources.Interviews)
+	repoClient, err := repo.NewMongoClient(ctx, db.Mongo, db.Sources.Interviews, db.Sources.Users)
 	if err != nil {
-		log.Panic(errors.WrapFail(err, "init interviews repo"))
+		log.Panic(errors.WrapFail(err, "init repo client"))
 	}
 
-	usersRepo, err := users.New(ctx, log, db.Storage, db.Sources.Users)
-	if err != nil {
-		log.Panic(errors.WrapFail(err, "init users repo"))
-	}
-
-	bot, err := telegram.New(log, cfg.Telegram, interviewsRepo, usersRepo)
+	bot, err := telegram.New(log, cfg.Telegram, repoClient)
 	if err != nil {
 		log.Panic(errors.WrapFail(err, "initialize bot service"))
 	}

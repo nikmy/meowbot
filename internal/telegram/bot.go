@@ -6,16 +6,12 @@ import (
 
 	"gopkg.in/telebot.v3"
 
-	"github.com/nikmy/meowbot/internal/repo/models"
+	"github.com/nikmy/meowbot/internal/repo"
+	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-func New(
-	logger logger.Logger,
-	cfg Config,
-	interviews models.InterviewsRepo,
-	users models.UsersRepo,
-) (*Bot, error) {
+func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   cfg.Token,
 		Updates: 256,
@@ -30,8 +26,8 @@ func New(
 	bot := &Bot{
 		bot:        b,
 		log:        logger,
-		users:      users,
-		interviews: interviews,
+		txm:        txn.NewManager(logger.With("txn"), repoClient),
+		repo: repoClient,
 	}
 
 	bot.applyNotifications(cfg)
@@ -45,8 +41,8 @@ type Bot struct {
 	ctx context.Context
 	log logger.Logger
 
-	users      models.UsersRepo
-	interviews models.InterviewsRepo
+	txm        txn.Manager
+	repo repo.Client
 
 	notifyBefore []int64
 	notifyPeriod time.Duration

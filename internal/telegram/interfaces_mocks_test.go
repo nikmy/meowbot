@@ -14,8 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	interviews "github.com/nikmy/meowbot/internal/interviews"
-	users "github.com/nikmy/meowbot/internal/users"
+	models "github.com/nikmy/meowbot/internal/repo/models"
 	logger "github.com/nikmy/meowbot/pkg/logger"
 	fsm "github.com/vitaliy-ukiru/fsm-telebot"
 	gomock "go.uber.org/mock/gomock"
@@ -791,7 +790,7 @@ func (m *MockinterviewsApi) EXPECT() *MockinterviewsApiMockRecorder {
 }
 
 // Cancel mocks base method.
-func (m *MockinterviewsApi) Cancel(ctx context.Context, id string, side interviews.Role) error {
+func (m *MockinterviewsApi) Cancel(ctx context.Context, id string, side models.Role) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Cancel", ctx, id, side)
 	ret0, _ := ret[0].(error)
@@ -802,20 +801,6 @@ func (m *MockinterviewsApi) Cancel(ctx context.Context, id string, side intervie
 func (mr *MockinterviewsApiMockRecorder) Cancel(ctx, id, side any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockinterviewsApi)(nil).Cancel), ctx, id, side)
-}
-
-// Close mocks base method.
-func (m *MockinterviewsApi) Close(ctx context.Context) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Close", ctx)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Close indicates an expected call of Close.
-func (mr *MockinterviewsApiMockRecorder) Close(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockinterviewsApi)(nil).Close), ctx)
 }
 
 // Create mocks base method.
@@ -863,10 +848,10 @@ func (mr *MockinterviewsApiMockRecorder) Done(ctx, id any) *gomock.Call {
 }
 
 // Find mocks base method.
-func (m *MockinterviewsApi) Find(ctx context.Context, id string) (*interviews.Interview, error) {
+func (m *MockinterviewsApi) Find(ctx context.Context, id string) (*models.Interview, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Find", ctx, id)
-	ret0, _ := ret[0].(*interviews.Interview)
+	ret0, _ := ret[0].(*models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -878,25 +863,25 @@ func (mr *MockinterviewsApiMockRecorder) Find(ctx, id any) *gomock.Call {
 }
 
 // FindByUser mocks base method.
-func (m *MockinterviewsApi) FindByUser(ctx context.Context, user string) ([]interviews.Interview, error) {
+func (m *MockinterviewsApi) FindByUser(ctx context.Context, userTg int64) ([]models.Interview, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByUser", ctx, user)
-	ret0, _ := ret[0].([]interviews.Interview)
+	ret := m.ctrl.Call(m, "FindByUser", ctx, userTg)
+	ret0, _ := ret[0].([]models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindByUser indicates an expected call of FindByUser.
-func (mr *MockinterviewsApiMockRecorder) FindByUser(ctx, user any) *gomock.Call {
+func (mr *MockinterviewsApiMockRecorder) FindByUser(ctx, userTg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByUser", reflect.TypeOf((*MockinterviewsApi)(nil).FindByUser), ctx, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByUser", reflect.TypeOf((*MockinterviewsApi)(nil).FindByUser), ctx, userTg)
 }
 
 // GetReadyAt mocks base method.
-func (m *MockinterviewsApi) GetReadyAt(ctx context.Context, at int64) ([]interviews.Interview, error) {
+func (m *MockinterviewsApi) GetReadyAt(ctx context.Context, at int64) ([]models.Interview, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetReadyAt", ctx, at)
-	ret0, _ := ret[0].([]interviews.Interview)
+	ret0, _ := ret[0].([]models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -908,7 +893,7 @@ func (mr *MockinterviewsApiMockRecorder) GetReadyAt(ctx, at any) *gomock.Call {
 }
 
 // Notify mocks base method.
-func (m *MockinterviewsApi) Notify(ctx context.Context, id string, at int64, notified []interviews.Role) error {
+func (m *MockinterviewsApi) Notify(ctx context.Context, id string, at int64, notified models.Role) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Notify", ctx, id, at, notified)
 	ret0, _ := ret[0].(error)
@@ -922,32 +907,17 @@ func (mr *MockinterviewsApiMockRecorder) Notify(ctx, id, at, notified any) *gomo
 }
 
 // Schedule mocks base method.
-func (m *MockinterviewsApi) Schedule(ctx context.Context, id string, interviewerTg int64, timeSlot [2]int64) error {
+func (m *MockinterviewsApi) Schedule(ctx context.Context, id string, interviewerTg int64, slot models.Meeting) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Schedule", ctx, id, interviewerTg, timeSlot)
+	ret := m.ctrl.Call(m, "Schedule", ctx, id, interviewerTg, slot)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Schedule indicates an expected call of Schedule.
-func (mr *MockinterviewsApiMockRecorder) Schedule(ctx, id, interviewerTg, timeSlot any) *gomock.Call {
+func (mr *MockinterviewsApiMockRecorder) Schedule(ctx, id, interviewerTg, slot any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockinterviewsApi)(nil).Schedule), ctx, id, interviewerTg, timeSlot)
-}
-
-// Txn mocks base method.
-func (m *MockinterviewsApi) Txn(ctx context.Context, do func() error) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Txn", ctx, do)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Txn indicates an expected call of Txn.
-func (mr *MockinterviewsApiMockRecorder) Txn(ctx, do any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Txn", reflect.TypeOf((*MockinterviewsApi)(nil).Txn), ctx, do)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockinterviewsApi)(nil).Schedule), ctx, id, interviewerTg, slot)
 }
 
 // MockusersApi is a mock of usersApi interface.
@@ -973,40 +943,25 @@ func (m *MockusersApi) EXPECT() *MockusersApiMockRecorder {
 	return m.recorder
 }
 
-// Assign mocks base method.
-func (m *MockusersApi) Assign(ctx context.Context, candidate, interviewer string, interview users.Meeting, onSuccess func() error) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Schedule", ctx, candidate, interviewer, interview, onSuccess)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Assign indicates an expected call of Assign.
-func (mr *MockusersApiMockRecorder) Assign(ctx, candidate, interviewer, interview, onSuccess any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockusersApi)(nil).Assign), ctx, candidate, interviewer, interview, onSuccess)
-}
-
 // Free mocks base method.
-func (m *MockusersApi) Free(ctx context.Context, interviewer users.User, interval [2]int64, onSuccess func() error) error {
+func (m *MockusersApi) Free(ctx context.Context, username string, meeting models.Meeting) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Free", ctx, interviewer, interval, onSuccess)
+	ret := m.ctrl.Call(m, "Free", ctx, username, meeting)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Free indicates an expected call of Free.
-func (mr *MockusersApiMockRecorder) Free(ctx, interviewer, interval, onSuccess any) *gomock.Call {
+func (mr *MockusersApiMockRecorder) Free(ctx, username, meeting any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Free", reflect.TypeOf((*MockusersApi)(nil).Free), ctx, interviewer, interval, onSuccess)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Free", reflect.TypeOf((*MockusersApi)(nil).Free), ctx, username, meeting)
 }
 
 // Get mocks base method.
-func (m *MockusersApi) Get(ctx context.Context, username string) (*users.User, error) {
+func (m *MockusersApi) Get(ctx context.Context, username string) (*models.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, username)
-	ret0, _ := ret[0].(*users.User)
+	ret0, _ := ret[0].(*models.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1018,10 +973,10 @@ func (mr *MockusersApiMockRecorder) Get(ctx, username any) *gomock.Call {
 }
 
 // Match mocks base method.
-func (m *MockusersApi) Match(ctx context.Context, targetInterval [2]int64) ([]users.User, error) {
+func (m *MockusersApi) Match(ctx context.Context, targetInterval [2]int64) ([]models.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Match", ctx, targetInterval)
-	ret0, _ := ret[0].([]users.User)
+	ret0, _ := ret[0].([]models.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1032,18 +987,33 @@ func (mr *MockusersApiMockRecorder) Match(ctx, targetInterval any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Match", reflect.TypeOf((*MockusersApi)(nil).Match), ctx, targetInterval)
 }
 
-// Upsert mocks base method.
-func (m *MockusersApi) Upsert(ctx context.Context, username string, user users.UserDiff) error {
+// Schedule mocks base method.
+func (m *MockusersApi) Schedule(ctx context.Context, username string, meeting models.Meeting) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upsert", ctx, username, user)
+	ret := m.ctrl.Call(m, "Schedule", ctx, username, meeting)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Schedule indicates an expected call of Schedule.
+func (mr *MockusersApiMockRecorder) Schedule(ctx, username, meeting any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockusersApi)(nil).Schedule), ctx, username, meeting)
+}
+
+// Upsert mocks base method.
+func (m *MockusersApi) Upsert(ctx context.Context, username string, telegramID *int64, employee *bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, username, telegramID, employee)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upsert indicates an expected call of Upsert.
-func (mr *MockusersApiMockRecorder) Upsert(ctx, username, user any) *gomock.Call {
+func (mr *MockusersApiMockRecorder) Upsert(ctx, username, telegramID, employee any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockusersApi)(nil).Upsert), ctx, username, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockusersApi)(nil).Upsert), ctx, username, telegramID, employee)
 }
 
 // MockloggerImpl is a mock of loggerImpl interface.

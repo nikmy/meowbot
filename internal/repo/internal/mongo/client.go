@@ -2,22 +2,40 @@ package repo
 
 import (
 	"context"
+	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/logger"
 )
+
+type Config struct {
+	Interval time.Duration `yaml:"interval"`
+
+	URL     string        `yaml:"url"`
+	Timeout time.Duration `yaml:"timeout"`
+
+	Database string `yaml:"database"`
+
+	Auth struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	} `yaml:"auth"`
+
+	Pool struct {
+		MinSize uint64 `yaml:"minSize"`
+		MaxSize uint64 `yaml:"maxSize"`
+	}
+}
 
 func NewMongoClient(
 	ctx context.Context,
-	lof logger.Logger,
-	cfg MongoConfig,
-	interviewsSrc DataSource,
-	usersSrc DataSource,
-) (Client, error) {
+	cfg Config,
+	interviewsCollectionName string,
+	usersCollectionName string,
+) (*mongoClient, error) {
 	client, err := mongo.Connect(
 		ctx,
 		options.Client().
@@ -35,8 +53,8 @@ func NewMongoClient(
 	db := client.Database(cfg.Database, &options.DatabaseOptions{})
 	return &mongoClient{
 		c:          client,
-		users:      mongoUsers{db.Collection(string(usersSrc))},
-		interviews: mongoInterviews{db.Collection(string(interviewsSrc))},
+		users:      mongoUsers{db.Collection(string(usersCollectionName))},
+		interviews: mongoInterviews{db.Collection(interviewsCollectionName)},
 	}, nil
 }
 
@@ -53,9 +71,3 @@ func (m *mongoClient) Interviews() models.InterviewsRepo {
 func (m *mongoClient) Users() models.UsersRepo {
 	return m.users
 }
-
-func (m *mongoClient) RunTxn(fn func(c Client)) {
-	//TODO implement me
-	panic("implement me")
-}
-

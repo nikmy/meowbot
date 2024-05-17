@@ -62,7 +62,7 @@ func (b *Bot) sendNeededNotifications() error {
 	now := time.Now().UTC().UnixMilli()
 	fut := now + b.notifyBefore[len(b.notifyBefore)-1]
 
-	upcoming, err := b.interviews.GetReadyAt(b.ctx, fut)
+	upcoming, err := b.repo.Interviews().GetReadyAt(b.ctx, fut)
 	if err != nil {
 		return errors.WrapFail(err, "get ready interviews")
 	}
@@ -100,7 +100,7 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 				continue
 			}
 
-			err = b.interviews.Notify(b.ctx, n.Interview.ID, n.NotifyTime, role)
+			err = b.repo.Interviews().Notify(b.ctx, n.Interview.ID, n.NotifyTime, role)
 			if err != nil {
 				b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
 			}

@@ -18,10 +18,10 @@ type Config struct {
 	Telegram    telegram.Config `yaml:"Telegram"`
 
 	Database struct {
-		Storage    repo.Config     `yaml:"storage"`
-		Sources struct{
-			Interviews repo.DataSource `yaml:"interviews"`
-			Users      repo.DataSource `yaml:"users"`
+		Mongo   repo.MongoConfig `yaml:"mongo"`
+		Sources struct {
+			Interviews string `yaml:"interviews"`
+			Users      string `yaml:"users"`
 		} `yaml:"sources"`
 	} `yaml:"Database"`
 }

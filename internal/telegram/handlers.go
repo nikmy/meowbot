@@ -92,7 +92,7 @@ func (b *Bot) start(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err := b.users.Upsert(
+	err := b.repo.Users().Upsert(
 		b.ctx,
 		sender.Username,
 		&sender.ID,
@@ -119,7 +119,7 @@ func (b *Bot) startMatch(c telebot.Context, s fsm.Context) error {
 func (b *Bot) matchReadIID(c telebot.Context, s fsm.Context) error {
 	iid := c.Text()
 
-	i, err := b.interviews.Find(b.ctx, iid)
+	i, err := b.repo.Interviews().Find(b.ctx, iid)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
 	}
@@ -163,7 +163,7 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 
 	meeting := models.Meeting{left.UnixMilli(), left.Add(time.Hour).UnixMilli()}
 
-	i, err := b.interviews.Find(b.ctx, iid)
+	i, err := b.repo.Interviews().Find(b.ctx, iid)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "find interview to match"))
 	}
@@ -176,7 +176,7 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, fmt.Sprintf("Собеседование уже назначено на %s", time.UnixMilli(i.Interval[0])))
 	}
 
-	free, err := b.users.Match(b.ctx, meeting)
+	free, err := b.repo.Users().Match(b.ctx, meeting)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Mathc request"))
 	}
@@ -189,7 +189,7 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 	assigned := false
 	for !assigned && len(free) > 0 {
 		// TODO: txn
-		assigned, err = b.users.Schedule(b.ctx, free[0].Username, meeting)
+		assigned, err = b.repo.Users().Schedule(b.ctx, free[0].Username, meeting)
 		if err != nil {
 			b.log.Warn(errors.WrapFail(err, "assign interview to interviewer"))
 			continue
@@ -200,7 +200,7 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 			continue
 		}
 
-		err = b.interviews.Schedule(b.ctx, iid, free[0].Telegram, meeting)
+		err = b.repo.Interviews().Schedule(b.ctx, iid, free[0].Telegram, meeting)
 		if err != nil {
 			b.log.Warn(errors.WrapFail(err, "schedule interview"))
 			assigned = false
@@ -231,7 +231,7 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	assigned, err := b.interviews.FindByUser(b.ctx, sender.ID)
+	assigned, err := b.repo.Interviews().FindByUser(b.ctx, sender.ID)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "find by candidate"))
 	}
@@ -312,13 +312,13 @@ func (b *Bot) createReadCandidate(c telebot.Context, s fsm.Context) error {
 		return b.fail(c, s, errors.Fail("get sender"))
 	}
 
-	err = b.users.Upsert(b.ctx, tg, nil, nil)
+	err = b.repo.Users().Upsert(b.ctx, tg, nil, nil)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "upsert user"))
 		return b.fail(c, s, err)
 	}
 
-	id, err := b.interviews.Create(b.ctx, vac, sender.ID)
+	id, err := b.repo.Interviews().Create(b.ctx, vac, sender.ID)
 	if err != nil {
 		b.log.Error(err)
 		return b.fail(c, s, errors.WrapFail(err, "create interview"))
@@ -339,7 +339,7 @@ func (b *Bot) startDelete(c telebot.Context, s fsm.Context) error {
 func (b *Bot) delete(c telebot.Context, s fsm.Context) error {
 	iid := c.Text()
 
-	found, err := b.interviews.Delete(b.ctx, iid)
+	found, err := b.repo.Interviews().Delete(b.ctx, iid)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
 	}
@@ -365,7 +365,7 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 	}
 
 	// TODO: txn
-	i, err := b.interviews.Find(b.ctx, iid)
+	i, err := b.repo.Interviews().Find(b.ctx, iid)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
 	}
@@ -383,12 +383,12 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		side = models.RoleCandidate
 	}
 
-	err = b.users.Free(b.ctx, sender.Username, *i.Interval)
+	err = b.repo.Users().Free(b.ctx, sender.Username, *i.Interval)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Free request"))
 	}
 
-	err = b.interviews.Cancel(b.ctx, iid, side)
+	err = b.repo.Interviews().Cancel(b.ctx, iid, side)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Cancel request"))
 	}
@@ -410,7 +410,7 @@ func (b *Bot) joinTeam(c telebot.Context, s fsm.Context) error {
 
 	mark := true
 
-	err := b.users.Upsert(b.ctx, sender.Username, &sender.ID, &mark)
+	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &mark)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}
@@ -426,7 +426,7 @@ func (b *Bot) leaveTeam(c telebot.Context, s fsm.Context) error {
 
 	mark := false
 
-	err := b.users.Upsert(b.ctx, sender.Username, &sender.ID, &mark)
+	err := b.repo.Users().Upsert(b.ctx, sender.Username, &sender.ID, &mark)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Users.Upsert"))
 	}

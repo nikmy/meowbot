@@ -1,11 +1,11 @@
 package telegram
 
 import (
-	"github.com/nikmy/meowbot/internal/interviews"
-	"github.com/nikmy/meowbot/internal/users"
-	"github.com/nikmy/meowbot/pkg/logger"
 	"github.com/vitaliy-ukiru/fsm-telebot"
 	"gopkg.in/telebot.v3"
+
+	"github.com/nikmy/meowbot/internal/repo/models"
+	"github.com/nikmy/meowbot/pkg/logger"
 )
 
 type telebotContext interface {
@@ -17,11 +17,11 @@ type fsmContext interface {
 }
 
 type interviewsApi interface {
-	interviews.API
+	models.InterviewsRepo
 }
 
 type usersApi interface {
-	users.API
+	models.UsersRepo
 }
 
 type loggerImpl interface {
@@ -31,4 +31,3 @@ type loggerImpl interface {
 type pubsub interface {
 	Pull(channel string) ([][]byte, error)
 }
-
