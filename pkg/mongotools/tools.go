@@ -45,6 +45,34 @@ func Field[T any](field string, value *T) bson.M {
 	return bson.M{field: value}
 }
 
+func AtMost[T any](ctx context.Context, c *mongo.Cursor, limit int) ([]T, error) {
+	switch {
+	case limit == 0:
+		_ = c.Close(ctx)
+		return nil, nil
+	case limit < 0:
+		return FilterFunc[T](ctx, c, nil)
+	}
+
+	defer c.Close(ctx)
+
+	parsed := make([]T, 0, limit)
+	for c.Next(ctx) {
+		var item T
+		err := c.Decode(&item)
+		if err != nil {
+			return nil, errors.WrapFail(err, "decode item")
+		}
+
+		parsed = append(parsed, item)
+		if len(parsed) == limit {
+			break
+		}
+	}
+
+	return parsed[:len(parsed):len(parsed)], c.Err()
+}
+
 func FilterFunc[T any](ctx context.Context, c *mongo.Cursor, filterFunc func(T) bool) ([]T, error) {
 	defer c.Close(ctx)
 

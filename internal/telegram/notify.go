@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"gopkg.in/telebot.v3"
@@ -65,7 +66,7 @@ func (b *Bot) sendNeededNotifications() error {
 	fut := now + b.notifyBefore[len(b.notifyBefore)-1]
 	prv := now - time.Minute.Milliseconds()
 
-	upcoming, err := b.repo.Interviews().GetStartedWithin(b.ctx, prv, fut)
+	upcoming, err := b.repo.Interviews().GetUpcoming(b.ctx, prv, fut)
 	if err != nil {
 		return errors.WrapFail(err, "get ready interviews")
 	}
@@ -77,7 +78,7 @@ func (b *Bot) sendNeededNotifications() error {
 
 	b.sendAllNotifications(needed)
 
-	b.log.Infof("sent %s", len(needed))
+	b.log.Debugf("sent %d", len(needed))
 
 	return nil
 }
@@ -105,9 +106,22 @@ func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notificatio
 			n.Interview.ID, n.Interview.Zoom,
 		)
 	} else {
+		var left string
+		weeks, days := int(n.LeftTime.Hours()/168), int(n.LeftTime.Hours()/24)
+		switch {
+		case weeks > 2:
+			left = strconv.Itoa(weeks) + " нед."
+		case days > 2:
+			left = strconv.Itoa(days) + " д."
+		case n.LeftTime.Hours() > 1:
+			left = strconv.Itoa(int(n.LeftTime.Hours())) + " ч."
+		default:
+			left = strconv.Itoa(int(n.LeftTime.Minutes())) + " мин."
+		}
+
 		msg = fmt.Sprintf(
-			"До собеседования `%s` на должность \"%s\" осталось %s",
-			n.Interview.ID, n.Interview.Vacancy, n.LeftTime,
+			"До собеседования `%s` на должность \"%s\" осталось менее %s",
+			n.Interview.ID, n.Interview.Vacancy, left,
 		)
 	}
 

@@ -900,10 +900,10 @@ func (mr *MockinterviewsApiMockRecorder) Create(ctx, vacancy, candidateTg any) *
 }
 
 // Delete mocks base method.
-func (m *MockinterviewsApi) Delete(ctx context.Context, id string) (bool, error) {
+func (m *MockinterviewsApi) Delete(ctx context.Context, id string) (*models.Interview, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Delete", ctx, id)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(*models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -972,19 +972,19 @@ func (mr *MockinterviewsApiMockRecorder) FixTg(ctx, username, tg any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FixTg", reflect.TypeOf((*MockinterviewsApi)(nil).FixTg), ctx, username, tg)
 }
 
-// GetReadyAt mocks base method.
-func (m *MockinterviewsApi) GetStartedWithin(ctx context.Context, now, at int64) ([]models.Interview, error) {
+// GetStartedWithin mocks base method.
+func (m *MockinterviewsApi) GetUpcoming(ctx context.Context, from, to int64) ([]models.Interview, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetStartedWithin", ctx, now, at)
+	ret := m.ctrl.Call(m, "GetUpcoming", ctx, from, to)
 	ret0, _ := ret[0].([]models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetReadyAt indicates an expected call of GetReadyAt.
-func (mr *MockinterviewsApiMockRecorder) GetReadyAt(ctx, now, at any) *gomock.Call {
+// GetStartedWithin indicates an expected call of GetStartedWithin.
+func (mr *MockinterviewsApiMockRecorder) GetStartedWithin(ctx, from, to any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStartedWithin", reflect.TypeOf((*MockinterviewsApi)(nil).GetStartedWithin), ctx, now, at)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpcoming", reflect.TypeOf((*MockinterviewsApi)(nil).GetUpcoming), ctx, from, to)
 }
 
 // Notify mocks base method.

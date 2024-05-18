@@ -159,29 +159,29 @@ func (m mongoInterviews) Update(
 	return errors.WrapFail(err, "update one interview")
 }
 
-func (m mongoInterviews) GetStartedWithin(ctx context.Context, from, to int64) ([]models.Interview, error) {
+func (m mongoInterviews) GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) ([]models.Interview, error) {
 	unixTime := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldUnixTime)
 	notified := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldNotified)
 
 	query := bson.M{"$and": bson.A{
 		bson.M{
 			models.InterviewFieldStatus:             models.InterviewStatusScheduled,
-			mng.Index(models.InterviewFieldMeet, 0): bson.M{"$lt": to},
+			mng.Index(models.InterviewFieldMeet, 0): bson.M{"$lt": startsBefore},
 		},
 		bson.M{"$or": bson.A{
 			bson.M{models.InterviewFieldLastNotification: bson.M{"$exists": false}},
-			bson.M{unixTime: bson.M{"$gt": from}},
+			bson.M{unixTime: bson.M{"$lt": lastNotifyBefore}},
 			bson.M{mng.Index(notified, int(models.RoleInterviewer)): false},
 			bson.M{mng.Index(notified, int(models.RoleCandidate)): false},
 		}},
 	}}
 
-	c, err := m.coll.Find(ctx, query, new(options.FindOptions).SetLimit(1024))
+	c, err := m.coll.Find(ctx, query, new(options.FindOptions))
 	if err != nil {
 		return nil, errors.WrapFail(err, "find interviews started at without recent notifications")
 	}
 
-	ready, err := mng.FilterFunc[models.Interview](ctx, c, nil)
+	ready, err := mng.AtMost[models.Interview](ctx, c, 1024)
 	return ready, errors.WrapFail(err, "parse interviews")
 }
 

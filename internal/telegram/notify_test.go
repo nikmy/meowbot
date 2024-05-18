@@ -236,8 +236,10 @@ func Test_getNeededNotifications(t *testing.T) {
 			}
 
 			cfg := Config{
-				NotifyPeriod: period,
-				NotifyBefore: before,
+				NotificationsConfig: NotificationsConfig{
+					NotifyPeriod: period,
+					NotifyBefore: before,
+				},
 			}
 
 			b := &Bot{log: logMock, repo: repoMock}
