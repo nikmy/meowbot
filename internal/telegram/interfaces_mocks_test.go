@@ -972,19 +972,19 @@ func (mr *MockinterviewsApiMockRecorder) FixTg(ctx, username, tg any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FixTg", reflect.TypeOf((*MockinterviewsApi)(nil).FixTg), ctx, username, tg)
 }
 
-// GetStartedWithin mocks base method.
-func (m *MockinterviewsApi) GetUpcoming(ctx context.Context, from, to int64) ([]models.Interview, error) {
+// GetUpcoming mocks base method.
+func (m *MockinterviewsApi) GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) ([]models.Interview, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUpcoming", ctx, from, to)
+	ret := m.ctrl.Call(m, "GetUpcoming", ctx, lastNotifyBefore, startsBefore)
 	ret0, _ := ret[0].([]models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetStartedWithin indicates an expected call of GetStartedWithin.
-func (mr *MockinterviewsApiMockRecorder) GetStartedWithin(ctx, from, to any) *gomock.Call {
+// GetUpcoming indicates an expected call of GetUpcoming.
+func (mr *MockinterviewsApiMockRecorder) GetUpcoming(ctx, lastNotifyBefore, startsBefore any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpcoming", reflect.TypeOf((*MockinterviewsApi)(nil).GetUpcoming), ctx, from, to)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUpcoming", reflect.TypeOf((*MockinterviewsApi)(nil).GetUpcoming), ctx, lastNotifyBefore, startsBefore)
 }
 
 // Notify mocks base method.
@@ -1345,4 +1345,83 @@ func (m *Mockpubsub) Pull(channel string) ([][]byte, error) {
 func (mr *MockpubsubMockRecorder) Pull(channel any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pull", reflect.TypeOf((*Mockpubsub)(nil).Pull), channel)
+}
+
+// MockTimeProvider is a mock of TimeProvider interface.
+type MockTimeProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockTimeProviderMockRecorder
+}
+
+// MockTimeProviderMockRecorder is the mock recorder for MockTimeProvider.
+type MockTimeProviderMockRecorder struct {
+	mock *MockTimeProvider
+}
+
+// NewMockTimeProvider creates a new mock instance.
+func NewMockTimeProvider(ctrl *gomock.Controller) *MockTimeProvider {
+	mock := &MockTimeProvider{ctrl: ctrl}
+	mock.recorder = &MockTimeProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTimeProvider) EXPECT() *MockTimeProviderMockRecorder {
+	return m.recorder
+}
+
+// Now mocks base method.
+func (m *MockTimeProvider) Now() time.Time {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Now")
+	ret0, _ := ret[0].(time.Time)
+	return ret0
+}
+
+// Now indicates an expected call of Now.
+func (mr *MockTimeProviderMockRecorder) Now() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTimeProvider)(nil).Now))
+}
+
+// NowMillis mocks base method.
+func (m *MockTimeProvider) NowMillis() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NowMillis")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
+// NowMillis indicates an expected call of NowMillis.
+func (mr *MockTimeProviderMockRecorder) NowMillis() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NowMillis", reflect.TypeOf((*MockTimeProvider)(nil).NowMillis))
+}
+
+// UTCDiff mocks base method.
+func (m *MockTimeProvider) UTCDiff() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UTCDiff")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// UTCDiff indicates an expected call of UTCDiff.
+func (mr *MockTimeProviderMockRecorder) UTCDiff() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UTCDiff", reflect.TypeOf((*MockTimeProvider)(nil).UTCDiff))
+}
+
+// ZoneName mocks base method.
+func (m *MockTimeProvider) ZoneName() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ZoneName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// ZoneName indicates an expected call of ZoneName.
+func (mr *MockTimeProviderMockRecorder) ZoneName() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ZoneName", reflect.TypeOf((*MockTimeProvider)(nil).ZoneName))
 }

@@ -5,7 +5,7 @@ import "time"
 type Config struct {
 	BotConfig           `yaml:"bot"`
 	NotificationsConfig `yaml:"notifications"`
-	TimeZoneConfig      `yaml:"time_zone"`
+	TimeZoneConfig      `yaml:"timeZone"`
 }
 
 type BotConfig struct {

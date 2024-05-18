@@ -210,7 +210,12 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf("%s;\n", time.UnixMilli(i.Meet[0]).Format(time.DateTime)))
+		timeInfo := fmt.Sprintf(
+			" %s %s;\n",
+			time.UnixMilli(i.Meet[0]).Format(time.DateTime),
+			b.time.ZoneName(),
+		)
+		sb.WriteString(timeInfo)
 	}
 
 	return b.final(c, s, sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeMarkdown})
@@ -259,9 +264,14 @@ func (b *Bot) cancel(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Собеседование не запланировано")
 	}
 
-	side := models.RoleInterviewer
-	if i.CandidateTg == sender.ID {
+	var side models.Role
+	switch sender.ID {
+	case i.CandidateTg:
 		side = models.RoleCandidate
+	case i.InterviewerTg:
+		side = models.RoleInterviewer
+	default:
+		return b.final(c, s, "Вы не являетесь участником собеседования")
 	}
 
 	scheduled, err := b.cancelInterview(ctx, i, side)

@@ -11,7 +11,6 @@ import (
 	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-
 func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   cfg.Token,
@@ -28,7 +27,10 @@ func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error)
 		bot:  b,
 		log:  logger.With("bot"),
 		repo: repoClient,
-		time: stdTime{utcDiff: cfg.UTCDiff},
+		time: stdTime{
+			zoneName: cfg.TimeZoneConfig.Name,
+			utcDiff:  cfg.UTCDiff,
+		},
 	}
 
 	bot.applyNotifications(cfg)

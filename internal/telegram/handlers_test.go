@@ -92,6 +92,9 @@ func TestBot_showInterviews(t *testing.T) {
 				repoMock.EXPECT().Interviews().Return(iMock).MaxTimes(2)
 			}
 
+			tMock := NewMockTimeProvider(ctrl)
+			tMock.EXPECT().ZoneName().Return("").AnyTimes()
+
 			log := NewMockloggerImpl(ctrl)
 			if tt.want.fail {
 				log.EXPECT().Error(gomock.Any()).Times(1)
@@ -99,6 +102,7 @@ func TestBot_showInterviews(t *testing.T) {
 
 			b := &Bot{
 				repo: repoMock,
+				time: tMock,
 				log:  log,
 			}
 

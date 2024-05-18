@@ -36,3 +36,7 @@ type loggerImpl interface {
 type pubsub interface {
 	Pull(channel string) ([][]byte, error)
 }
+
+type TimeProvider interface {
+	timeProvider
+}

@@ -6,10 +6,16 @@ type timeProvider interface {
 	Now() time.Time
 	NowMillis() int64
 	UTCDiff() time.Duration
+	ZoneName() string
 }
 
 type stdTime struct{
 	utcDiff time.Duration
+	zoneName string
+}
+
+func (s stdTime) ZoneName() string {
+	return s.zoneName
 }
 
 func (s stdTime) UTCDiff() time.Duration {
