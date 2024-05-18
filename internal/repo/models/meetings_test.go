@@ -119,3 +119,51 @@ func TestUser_AddMeeting(t *testing.T) {
 		})
 	}
 }
+
+func TestUser_FindAndDeleteMeeting(t *testing.T) {
+	type testcase struct {
+		name     string
+		assigned []Meeting
+		arg      Meeting
+		want     []Meeting
+		wantOk   bool
+	}
+
+	tests := [...]testcase{
+		{
+			name:   "no assigned",
+			arg:    Meeting{1, 2},
+			wantOk: false,
+		},
+		{
+			name:     "has meet",
+			assigned: []Meeting{{1, 2}, {3, 5}, {5, 6}},
+			arg:      Meeting{3, 5},
+			want:     []Meeting{{1, 2}, {5, 6}},
+			wantOk:   true,
+		},
+		{
+			name:     "mismatched start",
+			assigned: []Meeting{{1, 2}, {3, 5}, {5, 6}},
+			arg:      Meeting{4, 5},
+			want:     []Meeting{{1, 2}, {3, 5}, {5, 6}},
+			wantOk:   false,
+		},
+		{
+			name:     "mismatched end",
+			assigned: []Meeting{{1, 2}, {3, 5}, {5, 6}},
+			arg:      Meeting{3, 4},
+			want:     []Meeting{{1, 2}, {3, 5}, {5, 6}},
+			wantOk:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := User{Assigned: tt.assigned}
+			got, gotOk := u.FindAndDeleteMeeting(tt.arg)
+			require.ElementsMatch(t, tt.want, got)
+			require.Equal(t, tt.wantOk, gotOk)
+		})
+	}
+}

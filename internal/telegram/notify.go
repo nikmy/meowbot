@@ -61,10 +61,11 @@ type notification struct {
 }
 
 func (b *Bot) sendNeededNotifications() error {
-	now := time.Now().UnixMilli()
+	now := time.Now().Add(time.Hour * 3).UnixMilli()
 	fut := now + b.notifyBefore[len(b.notifyBefore)-1]
+	prv := now - time.Minute.Milliseconds()
 
-	upcoming, err := b.repo.Interviews().GetReadyAt(b.ctx, fut)
+	upcoming, err := b.repo.Interviews().GetStartedWithin(b.ctx, prv, fut)
 	if err != nil {
 		return errors.WrapFail(err, "get ready interviews")
 	}
@@ -90,21 +91,13 @@ func (b *Bot) sendAllNotifications(ns []notification) {
 	defer cancel()
 
 	for _, n := range ns {
-		for _, role := range n.Recipients {
-			tgID := int64(0)
-			switch role {
-			case models.RoleInterviewer:
-				tgID = n.Interview.InterviewerTg
-			case models.RoleCandidate:
-				tgID = n.Interview.CandidateTg
-			}
-
-			b.sendOneNotification(ctx, tgID, n, role)
+		if b.sendOneNotification(ctx, n.Interview.InterviewerTg, n, [2]bool{true}) {
+			b.sendOneNotification(ctx, n.Interview.CandidateTg, n, [2]bool{true, true})
 		}
 	}
 }
 
-func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notification, role models.Role) {
+func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notification, roles [2]bool) bool {
 	var msg string
 	if n.LeftTime == 0 {
 		msg = fmt.Sprintf(
@@ -121,7 +114,7 @@ func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notificatio
 	tx, err := txn.Start(ctx)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "start txn"))
-		return
+		return false
 	}
 	defer func() {
 		err := tx.Close(ctx)
@@ -133,18 +126,22 @@ func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notificatio
 	err = b.notify(tgID, msg)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "notify user %d", tgID))
-		return
+		return false
 	}
 
-	err = b.repo.Interviews().Notify(ctx, n.Interview.ID, n.NotifyTime, role)
+	err = b.repo.Interviews().Notify(ctx, n.Interview.ID, n.NotifyTime, roles)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "do Interviews.Notify request"))
+		return false
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "commit txn"))
+		return false
 	}
+
+	return true
 }
 
 func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []notification {

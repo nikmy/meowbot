@@ -973,22 +973,22 @@ func (mr *MockinterviewsApiMockRecorder) FixTg(ctx, username, tg any) *gomock.Ca
 }
 
 // GetReadyAt mocks base method.
-func (m *MockinterviewsApi) GetReadyAt(ctx context.Context, at int64) ([]models.Interview, error) {
+func (m *MockinterviewsApi) GetStartedWithin(ctx context.Context, now, at int64) ([]models.Interview, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetReadyAt", ctx, at)
+	ret := m.ctrl.Call(m, "GetStartedWithin", ctx, now, at)
 	ret0, _ := ret[0].([]models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetReadyAt indicates an expected call of GetReadyAt.
-func (mr *MockinterviewsApiMockRecorder) GetReadyAt(ctx, at any) *gomock.Call {
+func (mr *MockinterviewsApiMockRecorder) GetReadyAt(ctx, now, at any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReadyAt", reflect.TypeOf((*MockinterviewsApi)(nil).GetReadyAt), ctx, at)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStartedWithin", reflect.TypeOf((*MockinterviewsApi)(nil).GetStartedWithin), ctx, now, at)
 }
 
 // Notify mocks base method.
-func (m *MockinterviewsApi) Notify(ctx context.Context, id string, at int64, notified models.Role) error {
+func (m *MockinterviewsApi) Notify(ctx context.Context, id string, at int64, notified [2]bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Notify", ctx, id, at, notified)
 	ret0, _ := ret[0].(error)

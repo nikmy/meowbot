@@ -42,11 +42,11 @@ func (u User) FindAndDeleteMeeting(meeting Meeting) ([]Meeting, bool) {
 		return u.Assigned[i][0] >= meeting[0]
 	})
 	if idx == len(u.Assigned) {
-		return nil, false
+		return u.Assigned, false
 	}
 
 	if u.Assigned[idx][1] != meeting[1] {
-		return nil, false
+		return u.Assigned, false
 	}
 
 	return slices.Delete(u.Assigned, idx, idx+1), true

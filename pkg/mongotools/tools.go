@@ -2,6 +2,8 @@ package mongotools
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -26,6 +28,14 @@ func All() bson.M {
 
 func ID(id string) bson.M {
 	return bson.M{"_id": id}
+}
+
+func Path(keys ...string) string {
+	return strings.Join(keys, ".")
+}
+
+func Index(path string, i int) string {
+	return path+"."+strconv.Itoa(i)
 }
 
 func Field[T any](field string, value *T) bson.M {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/mongotools"
+	mng "github.com/nikmy/meowbot/pkg/mongotools"
 )
 
 type mongoUsers struct {
@@ -25,11 +25,11 @@ func (u mongoUsers) Update(
 ) (*models.User, error) {
 	r := u.coll.FindOneAndUpdate(
 		ctx,
-		mongotools.Field(models.UserFieldUsername, &username),
-		mongotools.SetAll(
-			mongotools.Field(models.UserFieldTelegram, telegramID),
-			mongotools.Field(models.UserFieldCategory, category),
-			mongotools.Field(models.UserFieldIntGrade, &intGrade),
+		mng.Field(models.UserFieldUsername, &username),
+		mng.SetAll(
+			mng.Field(models.UserFieldTelegram, telegramID),
+			mng.Field(models.UserFieldCategory, category),
+			mng.Field(models.UserFieldIntGrade, &intGrade),
 		),
 	)
 
@@ -61,11 +61,11 @@ func (u mongoUsers) Upsert(
 	upsert := true
 	r := u.coll.FindOneAndUpdate(
 		ctx,
-		mongotools.Field(models.UserFieldUsername, &username),
-		mongotools.SetAll(
-			mongotools.Field(models.UserFieldTelegram, telegramID),
-			mongotools.Field(models.UserFieldCategory, category),
-			mongotools.Field(models.UserFieldIntGrade, &intGrade),
+		mng.Field(models.UserFieldUsername, &username),
+		mng.SetAll(
+			mng.Field(models.UserFieldTelegram, telegramID),
+			mng.Field(models.UserFieldCategory, category),
+			mng.Field(models.UserFieldIntGrade, &intGrade),
 		),
 		&options.FindOneAndUpdateOptions{Upsert: &upsert},
 	)
@@ -89,7 +89,7 @@ func (u mongoUsers) Upsert(
 }
 
 func (u mongoUsers) Get(ctx context.Context, username string) (*models.User, error) {
-	r := u.coll.FindOne(ctx, mongotools.Field(models.UserFieldUsername, &username))
+	r := u.coll.FindOne(ctx, mng.Field(models.UserFieldUsername, &username))
 	if r.Err() != nil {
 		return nil, errors.WrapFail(r.Err(), "find user by username")
 	}
@@ -109,7 +109,7 @@ func (u mongoUsers) Match(ctx context.Context, slot [2]int64) ([]models.User, er
 		return nil, errors.WrapFail(err, "select users to match")
 	}
 
-	matched, err := mongotools.FilterFunc(ctx, c, func(user models.User) bool {
+	matched, err := mng.FilterFunc(ctx, c, func(user models.User) bool {
 		_, canAdd := user.AddMeeting(slot)
 		return canAdd
 	})

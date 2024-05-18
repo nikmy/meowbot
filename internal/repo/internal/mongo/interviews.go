@@ -12,7 +12,7 @@ import (
 
 	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/mongotools"
+	mng "github.com/nikmy/meowbot/pkg/mongotools"
 )
 
 type mongoInterviews struct {
@@ -40,7 +40,7 @@ func (m mongoInterviews) Create(ctx context.Context, vacancy string, candidateTg
 }
 
 func (m mongoInterviews) Delete(ctx context.Context, id string) (bool, error) {
-	r := m.coll.FindOneAndDelete(ctx, mongotools.ID(id))
+	r := m.coll.FindOneAndDelete(ctx, mng.ID(id))
 	err := r.Err()
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -63,7 +63,7 @@ func (m mongoInterviews) Schedule(
 ) error {
 	_, err := m.coll.UpdateOne(
 		ctx,
-		mongotools.ID(id),
+		mng.ID(id),
 		bson.M{"$set": bson.M{
 			models.InterviewFieldStatus:        models.InterviewStatusScheduled,
 			models.InterviewFieldInterviewerTg: interviewer.Telegram,
@@ -75,22 +75,23 @@ func (m mongoInterviews) Schedule(
 	return errors.WrapFail(err, "update interview")
 }
 
-func (m mongoInterviews) Notify(ctx context.Context, id string, at int64, notified models.Role) error {
+func (m mongoInterviews) Notify(ctx context.Context, id string, at int64, notified [2]bool) error {
+	notifiedField := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldNotified)
+	unixTimeField := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldUnixTime)
+
 	_, err := m.coll.UpdateOne(
 		ctx,
-		mongotools.ID(id),
+		mng.ID(id),
 		bson.M{"$set": bson.M{
-			models.InterviewFieldLastNotification: bson.M{
-				models.NotificationFieldUnixTime: at,
-				models.NotificationFieldNotified: notified,
-			},
+			unixTimeField: at,
+			notifiedField: notified,
 		}},
 	)
 	return errors.WrapFail(err, "update interview")
 }
 
 func (m mongoInterviews) Find(ctx context.Context, id string) (*models.Interview, error) {
-	r := m.coll.FindOne(ctx, mongotools.ID(id))
+	r := m.coll.FindOne(ctx, mng.ID(id))
 	err := r.Err()
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -121,7 +122,7 @@ func (m mongoInterviews) FindByUser(ctx context.Context, username string) ([]mod
 		return nil, errors.WrapFail(err, "find interview")
 	}
 
-	parsed, err := mongotools.FilterFunc[models.Interview](ctx, c, nil)
+	parsed, err := mng.FilterFunc[models.Interview](ctx, c, nil)
 	if err != nil {
 		return nil, errors.WrapFail(err, "filter interviews")
 	}
@@ -137,32 +138,35 @@ func (m mongoInterviews) Update(
 	data *[]byte,
 	zoom *string,
 ) error {
-	update := mongotools.SetAll(
-		mongotools.Field(models.InterviewFieldVacancy, vacancy),
-		mongotools.Field(models.InterviewFieldCandidateUN, candidate),
-		mongotools.Field(models.InterviewFieldData, data),
-		mongotools.Field(models.InterviewFieldZoom, zoom),
+	update := mng.SetAll(
+		mng.Field(models.InterviewFieldVacancy, vacancy),
+		mng.Field(models.InterviewFieldCandidateUN, candidate),
+		mng.Field(models.InterviewFieldData, data),
+		mng.Field(models.InterviewFieldZoom, zoom),
 	)
 
 	if candidate != nil {
 		update["$unset"] = bson.M{models.InterviewFieldCandidateTg: ""}
 	}
 
-	_, err := m.coll.UpdateOne(ctx, mongotools.ID(id), update)
+	_, err := m.coll.UpdateOne(ctx, mng.ID(id), update)
 	return errors.WrapFail(err, "update one interview")
 }
 
-func (m mongoInterviews) GetReadyAt(ctx context.Context, at int64) ([]models.Interview, error) {
+func (m mongoInterviews) GetStartedWithin(ctx context.Context, from, to int64) ([]models.Interview, error) {
+	unixTime := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldUnixTime)
+	notified := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldNotified)
+
 	query := bson.M{"$and": bson.A{
 		bson.M{
-			models.InterviewFieldStatus:      models.InterviewStatusScheduled,
-			models.InterviewFieldMeet + ".0": bson.A{"$lt", at},
+			models.InterviewFieldStatus:             models.InterviewStatusScheduled,
+			mng.Index(models.InterviewFieldMeet, 0): bson.M{"$lt": to},
 		},
 		bson.M{"$or": bson.A{
 			bson.M{models.InterviewFieldLastNotification: bson.M{"$exists": false}},
-			bson.M{models.InterviewFieldLastNotification: bson.M{
-				models.NotificationFieldUnixTime: bson.D{{"$gt", at - time.Minute.Milliseconds()}},
-			}},
+			bson.M{unixTime: bson.M{"$gt": from}},
+			bson.M{mng.Index(notified, int(models.RoleInterviewer)): false},
+			bson.M{mng.Index(notified, int(models.RoleCandidate)): false},
 		}},
 	}}
 
@@ -171,14 +175,14 @@ func (m mongoInterviews) GetReadyAt(ctx context.Context, at int64) ([]models.Int
 		return nil, errors.WrapFail(err, "find interviews started at without recent notifications")
 	}
 
-	ready, err := mongotools.FilterFunc[models.Interview](ctx, c, nil)
+	ready, err := mng.FilterFunc[models.Interview](ctx, c, nil)
 	return ready, errors.WrapFail(err, "parse interviews")
 }
 
 func (m mongoInterviews) Cancel(ctx context.Context, id string, side models.Role) error {
 	r, err := m.coll.UpdateOne(
 		ctx,
-		mongotools.ID(id),
+		mng.ID(id),
 		bson.M{
 			"$unset": bson.M{
 				models.InterviewFieldMeet:             true,
@@ -207,7 +211,7 @@ func (m mongoInterviews) Cancel(ctx context.Context, id string, side models.Role
 func (m mongoInterviews) Done(ctx context.Context, id string) error {
 	r, err := m.coll.UpdateOne(
 		ctx,
-		mongotools.ID(id),
+		mng.ID(id),
 		bson.M{"$set": bson.M{models.InterviewFieldStatus: models.InterviewStatusFinished}},
 	)
 	if err != nil {
@@ -224,8 +228,8 @@ func (m mongoInterviews) Done(ctx context.Context, id string) error {
 func (m mongoInterviews) FixTg(ctx context.Context, username string, tg int64) error {
 	_, err := m.coll.UpdateMany(
 		ctx,
-		mongotools.Field(models.InterviewFieldCandidateUN, &username),
-		mongotools.SetAll(mongotools.Field(models.InterviewFieldCandidateTg, &tg)),
+		mng.Field(models.InterviewFieldCandidateUN, &username),
+		mng.SetAll(mng.Field(models.InterviewFieldCandidateTg, &tg)),
 	)
 	return errors.WrapFail(err, "update many documents")
 }

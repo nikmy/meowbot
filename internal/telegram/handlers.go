@@ -170,7 +170,7 @@ func (b *Bot) matchReadIID(c telebot.Context, s fsm.Context) error {
 	}
 
 	b.setState(s, matchReadIntervalState)
-	return c.Send("Введите дату и время в формате ДД ММ ГГГГ ЧЧ ММ ZZZ:")
+	return c.Send("Введите дату и время в формате ДД ММ ГГГГ ЧЧ ММ")
 }
 
 func (b *Bot) match(c telebot.Context, s fsm.Context) error {
@@ -181,12 +181,12 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Ошибка, попробуйте ещё раз")
 	}
 
-	left, err := time.Parse("02 01 2006 15 04 MST", c.Text())
+	left, err := time.Parse("02 01 2006 15 04", c.Text())
 	if err != nil {
 		b.log.Debug(err)
-		return c.Send("Плохой формат даты.")
+		return b.final(c, s, "Плохой формат даты.")
 	}
-
+	left = left.Add(time.Hour * 3)
 	if left.Sub(time.Now()) < time.Minute {
 		return b.final(c, s, "В это время нельзя провести интервью")
 	}
@@ -612,6 +612,11 @@ func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
 		if err != nil {
 			return errors.WrapFail(err, "cancel interview assigned to deleted interviewer")
 		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "commit txn"))
 	}
 
 	return b.final(c, s, fmt.Sprintf("@%s больше не интервьюер", old.Username))
