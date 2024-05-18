@@ -181,13 +181,14 @@ func (b *Bot) match(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "Ошибка, попробуйте ещё раз")
 	}
 
-	left, err := time.Parse("02 01 2006 15 04", c.Text())
+	t, err := time.Parse("02 01 2006 15 04", c.Text())
 	if err != nil {
 		b.log.Debug(err)
 		return b.final(c, s, "Плохой формат даты.")
 	}
-	left = left.Add(time.Hour * 3)
-	if left.Sub(time.Now()) < time.Minute {
+
+	left := t.UTC().Add(b.time.UTCDiff())
+	if left.Sub(b.time.Now()) < time.Minute {
 		return b.final(c, s, "В это время нельзя провести интервью")
 	}
 
@@ -422,13 +423,59 @@ func (b *Bot) runDelete(c telebot.Context, s fsm.Context) error {
 func (b *Bot) delete(c telebot.Context, s fsm.Context) error {
 	iid := c.Text()
 
+	ctx, cancel, err := b.txm.NewSessionContext(b.ctx, time.Second*5)
+	if err != nil {
+		return b.fail(c, s, errors.WrapFail(err, "init session context"))
+	}
+	defer cancel()
+
 	found, err := b.repo.Interviews().Delete(b.ctx, iid)
 	if err != nil {
 		return b.fail(c, s, errors.WrapFail(err, "do Interviews.Find request"))
 	}
 
-	if !found {
+	if found == nil {
 		return b.final(c, s, "Такого собеседования нет")
+	}
+
+	tx, err := txn.Start(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "start txn"))
+	}
+	defer func() {
+		err := tx.Close(ctx)
+		if err != nil {
+			b.log.Warn(errors.WrapFail(err, "close txn"))
+		}
+	}()
+
+	cancelled, err := b.cancelInterview(ctx, found, models.RoleHR)
+	if err != nil {
+		return errors.WrapFail(err, "cancel interview")
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "commit txn"))
+	}
+
+	if !cancelled {
+		return b.final(c, s, "Собеседование удалено")
+	}
+
+	msg := fmt.Sprintf("Интервью `%s` на должность \"%s\" удалено", found.ID, found.Vacancy)
+	err = b.notify(found.CandidateTg, msg)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "notify candidate about deletion"))
+	}
+
+	if found.InterviewerTg == 0 {
+		return b.final(c, s, "Собеседование удалено")
+	}
+
+	err = b.notify(found.InterviewerTg, msg)
+	if err != nil {
+		b.log.Warn(errors.WrapFail(err, "notify candidate about deletion"))
 	}
 
 	return b.final(c, s, "Собеседование удалено")

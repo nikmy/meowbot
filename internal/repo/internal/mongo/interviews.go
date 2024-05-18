@@ -39,19 +39,25 @@ func (m mongoInterviews) Create(ctx context.Context, vacancy string, candidateTg
 	return id, nil
 }
 
-func (m mongoInterviews) Delete(ctx context.Context, id string) (bool, error) {
+func (m mongoInterviews) Delete(ctx context.Context, id string) (*models.Interview, error) {
 	r := m.coll.FindOneAndDelete(ctx, mng.ID(id))
 	err := r.Err()
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return false, nil
+		return nil, nil
 	}
 
 	if err != nil {
-		return false, errors.WrapFail(err, "find one and delete")
+		return nil, errors.WrapFail(err, "find one and delete")
 	}
 
-	return true, nil
+	var parsed models.Interview
+	err = r.Decode(&parsed)
+	if err != nil {
+		return nil, errors.WrapFail(err, "decode deleted interview")
+	}
+
+	return &parsed, nil
 }
 
 func (m mongoInterviews) Schedule(

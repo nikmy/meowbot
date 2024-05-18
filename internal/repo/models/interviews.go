@@ -7,7 +7,7 @@ type InterviewsRepo interface {
 	Create(ctx context.Context, vacancy string, candidateTg string) (id string, err error)
 
 	// Delete completely removes interview object
-	Delete(ctx context.Context, id string) (found bool, err error)
+	Delete(ctx context.Context, id string) (found *Interview, err error)
 
 	// Update patches interview
 	Update(ctx context.Context, id string, vacancy *string, candidate *string, data *[]byte, zoom *string) error
@@ -90,6 +90,7 @@ type Role int
 const (
 	RoleInterviewer Role = iota
 	RoleCandidate
+	RoleHR
 )
 
 const (
