@@ -170,7 +170,7 @@ func (b *Bot) showInterviews(c telebot.Context, s fsm.Context) error {
 		return b.final(c, s, "У вас нет назначенных собеседований")
 	}
 
-	slices.SortFunc(assigned, func(a, b models.Interview) int {
+	slices.SortFunc(assigned, func(a, b *models.Interview) int {
 		if a.Meet == nil {
 			return -1
 		}
@@ -347,7 +347,7 @@ func (b *Bot) cancelMeeting(ctx context.Context, username string, meet models.Me
 		return false, nil
 	}
 
-	updated, err := b.repo.Users().UpdateMeetings(ctx, username, meets)
+	updated, err := b.repo.Users().UpdateMeetings(ctx, username, meets, user.Assigned)
 	if err != nil {
 		return false, errors.WrapFail(err, "update meetings")
 	}
@@ -427,7 +427,7 @@ func (b *Bot) scheduleMeeting(ctx context.Context, username string, meet models.
 	}
 	meets := slices.Insert(user.Assigned, insertIdx, meet)
 
-	assigned, err := b.repo.Users().UpdateMeetings(ctx, username, meets)
+	assigned, err := b.repo.Users().UpdateMeetings(ctx, username, meets, user.Assigned)
 	if err != nil {
 		return false, errors.WrapFail(err, "update meetings")
 	}

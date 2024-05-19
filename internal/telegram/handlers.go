@@ -27,7 +27,7 @@ const (
 	addIntReadTgState fsm.State = "addIReadTg"
 	delIntReadTgState fsm.State = "delIReadTg"
 
-	addZoomReadIIDState fsm.State = "addZoomReadIId"
+	addZoomReadIIDState  fsm.State = "addZoomReadIId"
 	addZoomReadLinkState fsm.State = "addZoomReadLink"
 )
 
@@ -106,7 +106,11 @@ func (b *Bot) setState(s fsm.Context, target fsm.State) {
 }
 
 func (b *Bot) final(c telebot.Context, s fsm.Context, msg string, opts ...any) error {
-	b.setState(s, initialState)
+	err := s.Finish(true)
+	if err != nil {
+		b.log.Error(errors.WrapFail(err, "finish state"))
+	}
+
 	return c.Send(msg, opts...)
 }
 

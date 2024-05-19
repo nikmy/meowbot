@@ -59,7 +59,7 @@ func (u mongoUsers) findOneAndUpdate(
 
 	r := u.c.Collection().FindOneAndUpdate(
 		ctx,
-		mng.Field(models.UserFieldUsername, &username),
+		query.Eq(models.UserFieldUsername, &username),
 		upd.Build(),
 		options.FindOneAndUpdate().SetUpsert(upsert),
 	)
@@ -83,18 +83,15 @@ func (u mongoUsers) findOneAndUpdate(
 }
 
 func (u mongoUsers) Get(ctx context.Context, username string) (*models.User, error) {
-	r := u.c.Collection().FindOne(ctx, mng.Field(models.UserFieldUsername, &username))
-	if r.Err() != nil {
-		return nil, errors.WrapFail(r.Err(), "find user by username")
-	}
+	user, err := u.c.Finder().
+		Filter(query.Eq(models.UserFieldUsername, username)).
+		FindOne(ctx)
 
-	var user models.User
-	err := r.Decode(&user)
 	if err != nil {
-		return nil, errors.WrapFail(err, "decode user")
+		return nil, errors.WrapFail(err, "find user by username")
 	}
 
-	return &user, nil
+	return user, nil
 }
 
 func (u mongoUsers) Match(ctx context.Context, slot [2]int64) ([]models.User, error) {
@@ -105,7 +102,9 @@ func (u mongoUsers) Match(ctx context.Context, slot [2]int64) ([]models.User, er
 		return nil, errors.WrapFail(err, "select users to match")
 	}
 
-	matched, err := mng.FilterFunc(ctx, c, func(user models.User) bool {
+	maxUsers := 1024
+
+	matched, err := mng.FilterFunc(ctx, c, &maxUsers, func(user models.User) bool {
 		_, canAdd := user.AddMeeting(slot)
 		return canAdd
 	})
@@ -116,9 +115,17 @@ func (u mongoUsers) Match(ctx context.Context, slot [2]int64) ([]models.User, er
 	return matched, nil
 }
 
-func (u mongoUsers) UpdateMeetings(ctx context.Context, username string, meets []models.Meeting) (bool, error) {
+func (u mongoUsers) UpdateMeetings(
+	ctx context.Context,
+	username string,
+	meets []models.Meeting,
+	old []models.Meeting,
+) (bool, error) {
 	r, err := u.c.Updater().
-		Filter(query.Eq(models.UserFieldUsername, username)).
+		Filter(query.And(
+			query.Eq(models.UserFieldUsername, username),
+			query.Eq(models.UserFieldAssigned, old),
+		)).
 		Updates(update.Set(models.UserFieldAssigned, meets)).
 		UpdateOne(ctx)
 

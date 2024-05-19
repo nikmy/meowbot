@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vitaliy-ukiru/fsm-telebot"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
@@ -78,13 +80,15 @@ func TestBot_showInterviews(t *testing.T) {
 			cMock.EXPECT().Send(gomock.Any(), gomock.Any()).Times(1).Return(*new(error))
 
 			sMock := NewMockfsmContext(ctrl)
-			sMock.EXPECT().Set(initialState)
+			sMock.EXPECT().Finish(true)
 
 			iMock := NewMockinterviewsApi(ctrl)
 			repoMock := NewMockrepoClient(ctrl)
 
 			if tt.mock.sender != nil {
-				iMock.EXPECT().FixTg(gomock.Any(), tt.mock.sender.Username, tt.mock.sender.ID).Return((error)(nil))
+				iMock.EXPECT().
+					FixTg(gomock.Any(), tt.mock.sender.Username, tt.mock.sender.ID).
+					Return((error)(nil))
 				iMock.EXPECT().
 					FindByUser(gomock.Any(), tt.mock.sender.Username).
 					Return(tt.mock.interviews, tt.mock.iErr).
@@ -95,10 +99,15 @@ func TestBot_showInterviews(t *testing.T) {
 			tMock := NewMockTimeProvider(ctrl)
 			tMock.EXPECT().ZoneName().Return("").AnyTimes()
 
-			log := NewMockloggerImpl(ctrl)
-			if tt.want.fail {
-				log.EXPECT().Error(gomock.Any()).Times(1)
-			}
+			failed := false
+			log := zap.NewExample(
+				zap.Hooks(func(e zapcore.Entry) error {
+					if e.Level > zapcore.InfoLevel {
+						failed = true
+					}
+					return nil
+				}),
+			).Sugar()
 
 			b := &Bot{
 				repo: repoMock,
@@ -108,6 +117,7 @@ func TestBot_showInterviews(t *testing.T) {
 
 			err := b.showInterviews(cMock, sMock)
 			require.NoError(t, err)
+			require.Equal(t, tt.want.fail, failed)
 		})
 	}
 }

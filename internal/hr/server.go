@@ -2,19 +2,24 @@ package hr
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/gofiber/fiber/v2"
+	"go.uber.org/zap"
 
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/logger"
 )
 
-func NewServer(cfg Config, log logger.Logger, repoClient repo.Client) Server {
-	serveLog := log.With("api_http_server")
+func NewServer(
+	cfg Config,
+	log *zap.SugaredLogger,
+	repoClient repo.Client,
+	reqIdGetter reqIdGetter,
+	auth authorizer,
+) Server {
+	serveLog := log.Named("api_http_server")
 
 	fiberCfg := fiber.Config{
 		ReadTimeout:             cfg.HTTP.ReadTimeout,
@@ -29,7 +34,11 @@ func NewServer(cfg Config, log logger.Logger, repoClient repo.Client) Server {
 	}
 
 	fiberCfg.ErrorHandler = func(c *fiber.Ctx, err error) error {
-		serveLog.Warn(errors.WrapFail(err, "handle http request"))
+		reqID := reqIdGetter.GetRequestId(c.Request())
+		serveLog.With(
+			zap.String("request_id", reqID),
+			zap.Any("body", string(c.Body())),
+		).Error(err)
 		return c.Status(http.StatusInternalServerError).Send(nil)
 	}
 
@@ -37,6 +46,7 @@ func NewServer(cfg Config, log logger.Logger, repoClient repo.Client) Server {
 		repo: repoClient,
 		http: fiber.New(fiberCfg),
 		addr: cfg.HTTP.Addr,
+		auth: auth,
 		log:  serveLog,
 	}
 
@@ -49,7 +59,8 @@ type server struct {
 	repo repo.Client
 	http *fiber.App
 	addr string
-	log  logger.Logger
+	auth authorizer
+	log  *zap.SugaredLogger
 }
 
 func (s *server) Serve(ctx context.Context) error {
@@ -80,8 +91,27 @@ func (s *server) Shutdown(ctx context.Context) error {
 }
 
 func (s *server) setupRoutes() {
-	s.http.Post("/upsertEmployee", s.handleUpsertEmployee)
-	s.http.Post("/interviewData", s.handleInterviewData)
+	s.http.Post("/upsertEmployee", s.authWrapper(s.handleUpsertEmployee))
+	s.http.Post("/interviewData", s.authWrapper(s.handleInterviewData))
+}
+
+func (s *server) authWrapper(h fiber.Handler) fiber.Handler {
+	if s.auth == nil {
+		return h
+	}
+
+	return func(c *fiber.Ctx) error {
+		ok, err := s.auth.Authorize(c.Request())
+		if err != nil {
+			return errors.WrapFail(err, "authorize")
+		}
+
+		if !ok {
+			return c.Status(http.StatusUnauthorized).Send(nil)
+		}
+
+		return h(c)
+	}
 }
 
 func (s *server) handleInterviewData(c *fiber.Ctx) error {
@@ -97,16 +127,14 @@ func (s *server) handleInterviewData(c *fiber.Ctx) error {
 		Data      *[]byte `json:"data"`
 		Zoom      *string `json:"zoom"`
 	}
-	err := json.Unmarshal(c.Body(), &patch)
+	err := c.JSON(&patch)
 	if err != nil {
-		s.log.Error(errors.WrapFail(err, "unmarshal patch data"))
-		return c.Status(http.StatusInternalServerError).Send(nil)
+		return errors.WrapFail(err, "unmarshal patch data")
 	}
 
 	err = s.repo.Interviews().Update(c.Context(), iid, patch.Vacancy, patch.Candidate, patch.Data, patch.Zoom)
 	if err != nil {
-		s.log.Error(errors.WrapFail(err, "do Interviews.Find request"))
-		return c.Status(http.StatusInternalServerError).Send(nil)
+		return errors.WrapFail(err, "do Interviews.Find request")
 	}
 
 	return c.Status(http.StatusOK).Send(nil)
@@ -118,10 +146,9 @@ func (s *server) handleUpsertEmployee(c *fiber.Ctx) error {
 		HR bool   `json:"hr"`
 	}
 
-	err := json.Unmarshal(c.Body(), &req)
+	err := c.JSON(&req)
 	if err != nil {
-		s.log.Error(errors.WrapFail(err, "unmarshal body as json"))
-		return c.Status(http.StatusInternalServerError).Send(nil)
+		return errors.WrapFail(err, "unmarshal body as json")
 	}
 
 	cat := models.EmployeeUser
@@ -131,8 +158,7 @@ func (s *server) handleUpsertEmployee(c *fiber.Ctx) error {
 
 	_, err = s.repo.Users().Upsert(c.Context(), req.TG, nil, &cat, nil)
 	if err != nil {
-		s.log.Error(errors.WrapFail(err, "do Users.Upsert request"))
-		return c.Status(http.StatusInternalServerError).Send(nil)
+		return errors.WrapFail(err, "do Users.Upsert request")
 	}
 
 	return c.Status(http.StatusOK).Send(nil)

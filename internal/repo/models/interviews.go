@@ -22,10 +22,10 @@ type InterviewsRepo interface {
 	Find(ctx context.Context, id string) (*Interview, error)
 
 	// FindByUser returns all user's interviews
-	FindByUser(ctx context.Context, username string) ([]Interview, error)
+	FindByUser(ctx context.Context, username string) ([]*Interview, error)
 
 	// GetUpcoming returns list of upcoming interviews of fixed (1024) size.
-	GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) (interviews []Interview, err error)
+	GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) (interviews []*Interview, err error)
 
 	// Cancel cancels the interview, making it done without results.
 	Cancel(ctx context.Context, id string, side Role) (err error)

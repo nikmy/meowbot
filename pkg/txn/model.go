@@ -2,38 +2,44 @@ package txn
 
 import "context"
 
+type Session interface {
+	BindContext(ctx context.Context) context.Context
+
+	Txn() Txn
+	TxnWithModel(c Consistency, i Isolation) Txn
+	Close(ctx context.Context)
+}
+
 type Txn interface {
 	Start(ctx context.Context) error
+	ActiveTxn
+}
+
+type ActiveTxn interface {
 	Abort(ctx context.Context) error
 	Commit(ctx context.Context) error
 	Close(ctx context.Context) error
 }
 
-type Model int
+type Consistency int
 
 const (
-	// ModelSnapshotIsolation formally means:
-	// 1. within a transaction T, reads observe T
-	//    most recent writes (if any)
-	// 2. reads without a preceding write in T1
-	//    must observe the state written by a T0,
-	//    such that T0 is visible to T1, and no
-	//    more recent transaction wrote to that
-	//    object
-	ModelSnapshotIsolation Model = iota
+	// CausalConsistency means that
+	// all operations within transactions
+	// are sequential consistent
+	CausalConsistency Consistency = iota
 
-	// ModelSerializable formally means:
-	// execution of the operations of
-	// concurrently executing transactions
-	// produces the same effect as some
-	// serial execution of them
-	ModelSerializable
+	// Linearizable means that
+	// operations order is consistent
+	// with real time order
+	Linearizable
+)
 
-	// ModelStrictSerializable guarantees
-	// that operations take place atomically:
-	// a transaction’s sub-operations do not
-	// appear to interleave with sub-operations
-	// from other transactions. It implies
-	// serializability and linearizability
-	ModelStrictSerializable
+type Isolation int
+
+const (
+	ReadUncommitted Isolation = iota
+	ReadCommitted
+	RepeatableRead
+	Serializable
 )

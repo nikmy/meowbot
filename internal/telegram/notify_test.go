@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
 )
@@ -223,10 +224,6 @@ func Test_getNeededNotifications(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
-			logMock := NewMockloggerImpl(ctrl)
-			logMock.EXPECT().
-				Warnf(gomock.Any()).AnyTimes()
-
 			repoMock := NewMockrepoClient(ctrl)
 
 			period := time.Duration(tt.fields.notifyPeriod) * time.Millisecond
@@ -242,7 +239,7 @@ func Test_getNeededNotifications(t *testing.T) {
 				},
 			}
 
-			b := &Bot{log: logMock, repo: repoMock}
+			b := &Bot{log: zap.NewNop().Sugar(), repo: repoMock}
 			b.applyNotifications(cfg)
 
 			got := b.getNeededNotifications(tt.args.now, tt.args.upcoming)

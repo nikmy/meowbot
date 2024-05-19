@@ -6,7 +6,6 @@ import (
 
 	"github.com/nikmy/meowbot/internal/repo"
 	"github.com/nikmy/meowbot/internal/repo/models"
-	"github.com/nikmy/meowbot/pkg/logger"
 )
 
 type telebotContext interface {
@@ -27,10 +26,6 @@ type interviewsApi interface {
 
 type usersApi interface {
 	models.UsersRepo
-}
-
-type loggerImpl interface {
-	logger.Logger
 }
 
 type pubsub interface {

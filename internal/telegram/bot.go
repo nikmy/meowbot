@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/zap"
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo"
-	"github.com/nikmy/meowbot/pkg/logger"
 	"github.com/nikmy/meowbot/pkg/txn"
 )
 
-func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error) {
+func New(log *zap.SugaredLogger, cfg Config, repoClient repo.Client) (*Bot, error) {
 	b, err := telebot.NewBot(telebot.Settings{
 		Token:   cfg.Token,
 		Updates: 256,
@@ -25,7 +25,7 @@ func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error)
 
 	bot := &Bot{
 		bot:  b,
-		log:  logger.With("bot"),
+		log:  log.Named("bot"),
 		repo: repoClient,
 		time: stdTime{
 			zoneName: cfg.TimeZoneConfig.Name,
@@ -43,7 +43,7 @@ type Bot struct {
 	bot *telebot.Bot
 
 	ctx context.Context
-	log logger.Logger
+	log *zap.SugaredLogger
 
 	txm  txn.Manager
 	repo repo.Client

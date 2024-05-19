@@ -11,6 +11,7 @@ import (
 	"github.com/chenmingyong0423/go-mongox/builder/update"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
 	"github.com/nikmy/meowbot/pkg/errors"
@@ -27,8 +28,8 @@ func (m mongoInterviews) Create(ctx context.Context, vacancy string, candidate s
 	id := timestamp + randomSuffix
 
 	_, err := m.c.Creator().InsertOne(ctx, &models.Interview{
-		ID: id,
-		Vacancy: vacancy,
+		ID:          id,
+		Vacancy:     vacancy,
 		CandidateUN: candidate,
 	})
 	if err != nil {
@@ -39,7 +40,7 @@ func (m mongoInterviews) Create(ctx context.Context, vacancy string, candidate s
 }
 
 func (m mongoInterviews) Delete(ctx context.Context, id string) (*models.Interview, error) {
-	r := m.c.Collection().FindOneAndDelete(ctx, mng.ID(id))
+	r := m.c.Collection().FindOneAndDelete(ctx, query.Id(id))
 	err := r.Err()
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -66,17 +67,16 @@ func (m mongoInterviews) Schedule(
 	interviewer models.User,
 	meet models.Meeting,
 ) error {
-	_, err := m.c.Collection().UpdateOne(
-		ctx,
-		mng.ID(id),
-		update.BsonBuilder().
+	_, err := m.c.Updater().
+		Filter(query.Id(id)).
+		Updates(update.BsonBuilder().
 			Set(models.InterviewFieldStatus, models.InterviewStatusScheduled).
 			Set(models.InterviewFieldInterviewerTg, interviewer.Telegram).
 			Set(models.InterviewFieldInterviewerUN, interviewer.Username).
 			Set(models.InterviewFieldCandidateTg, candidate.Telegram).
 			Set(models.InterviewFieldMeet, meet).
-			Build(),
-	)
+			Build()).
+		UpdateOne(ctx)
 	return errors.WrapFail(err, "update interview")
 }
 
@@ -84,20 +84,22 @@ func (m mongoInterviews) Notify(ctx context.Context, id string, at int64, notifi
 	notifiedField := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldNotified)
 	unixTimeField := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldUnixTime)
 
-	_, err := m.c.Collection().UpdateOne(
-		ctx,
-		mng.ID(id),
-		bson.M{"$set": bson.M{
-			unixTimeField: at,
-			notifiedField: notified,
-		}},
-	)
+	_, err := m.c.Updater().
+		Filter(query.Id(id)).
+		Updates(
+			update.BsonBuilder().
+				Set(unixTimeField, at).
+				Set(notifiedField, notified).
+				Build(),
+		).
+		UpdateOne(ctx)
 	return errors.WrapFail(err, "update interview")
 }
 
 func (m mongoInterviews) Find(ctx context.Context, id string) (*models.Interview, error) {
-	r := m.c.Collection().FindOne(ctx, mng.ID(id))
-	err := r.Err()
+	r, err := m.c.Finder().
+		Filter(query.Id(id)).
+		FindOne(ctx)
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, nil
@@ -107,29 +109,19 @@ func (m mongoInterviews) Find(ctx context.Context, id string) (*models.Interview
 		return nil, errors.WrapFail(err, "find interview by id")
 	}
 
-	var parsed models.Interview
-	err = r.Decode(&parsed)
-	if err != nil {
-		return nil, errors.WrapFail(err, "decode interview")
-	}
-
-	return &parsed, nil
+	return r, nil
 }
 
-func (m mongoInterviews) FindByUser(ctx context.Context, username string) ([]models.Interview, error) {
-	c, err := m.c.Collection().Find(
-		ctx,
-		bson.M{"$or": []bson.M{
-			{models.InterviewFieldCandidateUN: username},
-			{models.InterviewFieldInterviewerUN: username},
-		}})
+func (m mongoInterviews) FindByUser(ctx context.Context, username string) ([]*models.Interview, error) {
+	parsed, err := m.c.Finder().
+		Filter(query.Or(
+			query.Eq(models.InterviewFieldCandidateUN, username),
+			query.Eq(models.InterviewFieldInterviewerUN, username),
+		)).
+		Find(ctx)
+
 	if err != nil {
 		return nil, errors.WrapFail(err, "find interview")
-	}
-
-	parsed, err := mng.FilterFunc[models.Interview](ctx, c, nil)
-	if err != nil {
-		return nil, errors.WrapFail(err, "filter interviews")
 	}
 
 	return parsed, nil
@@ -143,22 +135,23 @@ func (m mongoInterviews) Update(
 	data *[]byte,
 	zoom *string,
 ) error {
-	update := mng.SetAll(
-		mng.Field(models.InterviewFieldVacancy, vacancy),
-		mng.Field(models.InterviewFieldCandidateUN, candidate),
-		mng.Field(models.InterviewFieldData, data),
-		mng.Field(models.InterviewFieldZoom, zoom),
-	)
-
+	upd := update.BsonBuilder().
+		Set(models.InterviewFieldVacancy, vacancy).
+		Set(models.InterviewFieldCandidateUN, candidate).
+		Set(models.InterviewFieldData, data).
+		Set(models.InterviewFieldZoom, zoom)
 	if candidate != nil {
-		update["$unset"] = bson.M{models.InterviewFieldCandidateTg: ""}
+		upd.Unset(models.InterviewFieldCandidateTg)
 	}
 
-	_, err := m.c.Collection().UpdateOne(ctx, mng.ID(id), update)
+	_, err := m.c.Updater().
+		Filter(query.Id(id)).
+		Updates(upd.Build()).
+		UpdateOne(ctx)
 	return errors.WrapFail(err, "update one interview")
 }
 
-func (m mongoInterviews) GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) ([]models.Interview, error) {
+func (m mongoInterviews) GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) ([]*models.Interview, error) {
 	unixTime := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldUnixTime)
 	notified := mng.Path(models.InterviewFieldLastNotification, models.NotificationFieldNotified)
 
@@ -167,41 +160,38 @@ func (m mongoInterviews) GetUpcoming(ctx context.Context, lastNotifyBefore, star
 			query.Eq(models.InterviewFieldStatus, models.InterviewStatusScheduled),
 			bson.D{{mng.Index(models.InterviewFieldMeet, 0), bson.M{"$lt": startsBefore}}},
 			query.Or(
-				query.Exists(models.InterviewFieldLastNotification, true),
+				query.Exists(models.InterviewFieldLastNotification, false),
 				query.Lt(unixTime, lastNotifyBefore),
-				bson.D{
-					{mng.Index(notified, int(models.RoleInterviewer)), false},
-					{mng.Index(notified, int(models.RoleCandidate)), false},
-				},
+				query.Eq(mng.Index(notified, int(models.RoleInterviewer)), false),
+				query.Eq(mng.Index(notified, int(models.RoleCandidate)), false),
 			),
 		).
 		Build()
 
-	c, err := m.c.Collection().Find(ctx, q)
-	if err != nil {
-		return nil, errors.WrapFail(err, "find interviews started at without recent notifications")
-	}
+	ready, err := m.c.Finder().
+		Filter(q).
+		Find(ctx, options.Find().SetLimit(1024))
 
-	ready, err := mng.AtMost[models.Interview](ctx, c, 1024)
-	return ready, errors.WrapFail(err, "parse interviews")
+	return ready, errors.WrapFail(err, "find interviews started at without recent notifications")
 }
 
 func (m mongoInterviews) Cancel(ctx context.Context, id string, side models.Role) error {
-	r, err := m.c.Collection().UpdateOne(
-		ctx,
-		query.Id(id),
-		update.BsonBuilder().
-			Unset(
-				models.InterviewFieldMeet,
-				models.InterviewFieldLastNotification,
-				models.InterviewFieldInterviewerTg,
-				models.InterviewFieldInterviewerUN,
-				models.InterviewFieldZoom,
-			).
-			Set(models.InterviewFieldStatus, models.InterviewStatusCancelled).
-			Set(models.InterviewFieldCancelledBy, side).
-			Build(),
-	)
+	r, err := m.c.Updater().
+		Filter(query.Id(id)).
+		Updates(
+			update.BsonBuilder().
+				Unset(
+					models.InterviewFieldMeet,
+					models.InterviewFieldLastNotification,
+					models.InterviewFieldInterviewerTg,
+					models.InterviewFieldInterviewerUN,
+					models.InterviewFieldZoom,
+				).
+				Set(models.InterviewFieldStatus, models.InterviewStatusCancelled).
+				Set(models.InterviewFieldCancelledBy, side).
+				Build(),
+		).
+		UpdateOne(ctx)
 	if err != nil {
 		return errors.WrapFail(err, "update interview by id")
 	}
@@ -214,11 +204,11 @@ func (m mongoInterviews) Cancel(ctx context.Context, id string, side models.Role
 }
 
 func (m mongoInterviews) Done(ctx context.Context, id string) error {
-	r, err := m.c.Collection().UpdateOne(
-		ctx,
-		mng.ID(id),
-		bson.M{"$set": bson.M{models.InterviewFieldStatus: models.InterviewStatusFinished}},
-	)
+	r, err := m.c.Updater().
+		Filter(query.Id(id)).
+		Updates(
+			update.Set(models.InterviewFieldStatus, models.InterviewStatusFinished),
+		).UpdateOne(ctx)
 	if err != nil {
 		return errors.WrapFail(err, "update interview by id")
 	}

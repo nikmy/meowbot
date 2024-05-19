@@ -10,7 +10,7 @@ type UsersRepo interface {
 	Upsert(ctx context.Context, username string, telegramID *int64, category *UserCategory, intGrade *int) (*User, error)
 	Get(ctx context.Context, username string) (*User, error)
 
-	UpdateMeetings(ctx context.Context, username string, meets []Meeting) (bool, error)
+	UpdateMeetings(ctx context.Context, username string, meets []Meeting, old []Meeting) (bool, error)
 	Match(ctx context.Context, targetInterval [2]int64) ([]User, error)
 }
 

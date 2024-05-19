@@ -7,12 +7,6 @@ import (
 	"github.com/nikmy/meowbot/pkg/errors"
 )
 
-type Session interface {
-	Txn() Txn
-	TxnWithModel(model Model) Txn
-	Close(ctx context.Context)
-}
-
 type sessionManager interface {
 	NewSession() (Session, error)
 }
@@ -25,6 +19,8 @@ type Manager struct {
 	sessionManager
 }
 
+type sessionKey struct{}
+
 func (m Manager) NewSessionContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc, error) {
 	session, err := m.NewSession()
 	if err != nil {
@@ -32,17 +28,24 @@ func (m Manager) NewSessionContext(parent context.Context, timeout time.Duration
 	}
 
 	ctx, cancel := context.WithTimeout(parent, timeout)
-	ctx = context.WithValue(ctx, "txn_session", session)
 	context.AfterFunc(ctx, func() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), time.Second)
 		defer cancelClose()
 		session.Close(closeCtx)
 	})
 
+	ctx = context.WithValue(parent, sessionKey{}, session)
+	ctx = session.BindContext(ctx)
+
 	return ctx, cancel, nil
 }
 
-func Start(ctx context.Context) (Txn, error) {
-	tx := ctx.Value("txn_session").(Session).Txn()
-	return tx, tx.Start(ctx)
+func Start(ctx context.Context, c Consistency, i Isolation) (ActiveTxn, error) {
+	session, ok := ctx.Value(sessionKey{}).(Session)
+	if !ok {
+		return nil, errors.Fail("get session from context")
+	}
+
+	tx := session.Txn()
+	return tx, errors.WrapFail(tx.Start(ctx), "start txn")
 }

@@ -279,7 +279,7 @@ func (b *Bot) delInterviewer(c telebot.Context, s fsm.Context) error {
 			continue
 		}
 
-		_, err := b.cancelInterview(ctx, &assigned[i], models.RoleInterviewer)
+		_, err := b.cancelInterview(ctx, assigned[i], models.RoleInterviewer)
 		if err != nil {
 			return errors.WrapFail(err, "cancel interview assigned to deleted interviewer")
 		}

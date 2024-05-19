@@ -45,7 +45,9 @@ func NewMongoClient(
 			SetAuth(options.Credential{
 				Username: cfg.Auth.Username,
 				Password: cfg.Auth.Password,
-			}),
+			}).
+			SetRetryReads(true).
+			SetRetryWrites(true),
 	)
 	if err != nil {
 		return nil, errors.WrapFail(err, "connect to mongo db")
