@@ -7,8 +7,8 @@ import (
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo"
-	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/logger"
+	"github.com/nikmy/meowbot/pkg/txn"
 )
 
 func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error) {
@@ -31,6 +31,7 @@ func New(logger logger.Logger, cfg Config, repoClient repo.Client) (*Bot, error)
 			zoneName: cfg.TimeZoneConfig.Name,
 			utcDiff:  cfg.UTCDiff,
 		},
+		txm: txn.NewManager(repoClient),
 	}
 
 	bot.applyNotifications(cfg)
@@ -55,14 +56,6 @@ type Bot struct {
 
 func (b *Bot) Run(ctx context.Context) error {
 	b.ctx = ctx
-
-	b.txm = txn.NewManager(
-		ctx,
-		b.log.With("txn"),
-		b.repo,
-		time.Second*3,
-	)
-
 	b.setupHandlers()
 	go b.bot.Start()
 	b.runNotifier()

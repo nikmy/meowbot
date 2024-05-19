@@ -11,8 +11,8 @@ import (
 	"gopkg.in/telebot.v3"
 
 	"github.com/nikmy/meowbot/internal/repo/models"
-	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/errors"
+	"github.com/nikmy/meowbot/pkg/txn"
 )
 
 func (b *Bot) applyNotifications(cfg Config) {

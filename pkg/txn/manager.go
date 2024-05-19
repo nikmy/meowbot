@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/nikmy/meowbot/pkg/errors"
-	"github.com/nikmy/meowbot/pkg/logger"
 )
 
 type Session interface {
 	Txn() Txn
+	TxnWithModel(model Model) Txn
 	Close(ctx context.Context)
 }
 
@@ -17,24 +17,16 @@ type sessionManager interface {
 	NewSession() (Session, error)
 }
 
-func NewManager(ctx context.Context, l logger.Logger, m sessionManager, txnTimeout time.Duration) Manager {
-	return Manager{
-		ctx:     ctx,
-		log:     l,
-		manager: m,
-		maxTime: txnTimeout,
-	}
+func NewManager(m sessionManager) Manager {
+	return Manager{m}
 }
 
 type Manager struct {
-	ctx     context.Context
-	log     logger.Logger
-	manager sessionManager
-	maxTime time.Duration
+	sessionManager
 }
 
 func (m Manager) NewSessionContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc, error) {
-	session, err := m.manager.NewSession()
+	session, err := m.NewSession()
 	if err != nil {
 		return nil, nil, errors.WrapFail(err, "create session context")
 	}

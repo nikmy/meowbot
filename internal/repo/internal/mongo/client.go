@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/chenmingyong0423/go-mongox"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -53,8 +54,12 @@ func NewMongoClient(
 	db := client.Database(cfg.Database, &options.DatabaseOptions{})
 	return &mongoClient{
 		c:          client,
-		users:      mongoUsers{db.Collection(usersCollectionName)},
-		interviews: mongoInterviews{db.Collection(interviewsCollectionName)},
+		users:      mongoUsers{
+			c: mongox.NewCollection[models.User](db.Collection(usersCollectionName)),
+		},
+		interviews: mongoInterviews{
+			c: mongox.NewCollection[models.Interview](db.Collection(interviewsCollectionName)),
+		},
 	}, nil
 }
 

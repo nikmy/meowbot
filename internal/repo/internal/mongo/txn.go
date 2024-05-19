@@ -5,8 +5,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/nikmy/meowbot/internal/repo/txn"
 	"github.com/nikmy/meowbot/pkg/errors"
+	"github.com/nikmy/meowbot/pkg/txn"
 )
 
 func (m *mongoClient) NewSession() (txn.Session, error) {
@@ -20,6 +20,13 @@ func (m *mongoClient) NewSession() (txn.Session, error) {
 
 type session struct {
 	s mongo.Session
+}
+
+func (s *session) TxnWithModel(model txn.Model) txn.Txn {
+	if model > txn.ModelSnapshotIsolation {
+		panic("unsupported consistency level")
+	}
+	return s.Txn()
 }
 
 func (s *session) Txn() txn.Txn {

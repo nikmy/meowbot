@@ -15,8 +15,8 @@ import (
 	time "time"
 
 	models "github.com/nikmy/meowbot/internal/repo/models"
-	txn "github.com/nikmy/meowbot/internal/repo/txn"
 	logger "github.com/nikmy/meowbot/pkg/logger"
+	txn "github.com/nikmy/meowbot/pkg/txn"
 	fsm "github.com/vitaliy-ukiru/fsm-telebot"
 	gomock "go.uber.org/mock/gomock"
 	telebot "gopkg.in/telebot.v3"

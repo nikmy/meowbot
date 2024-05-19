@@ -5,7 +5,7 @@ import (
 
 	mongorepo "github.com/nikmy/meowbot/internal/repo/internal/mongo"
 	"github.com/nikmy/meowbot/internal/repo/models"
-	"github.com/nikmy/meowbot/internal/repo/txn"
+	"github.com/nikmy/meowbot/pkg/txn"
 )
 
 type Client interface {
