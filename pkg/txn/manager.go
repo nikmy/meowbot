@@ -40,12 +40,21 @@ func (m Manager) NewSessionContext(parent context.Context, timeout time.Duration
 	return ctx, cancel, nil
 }
 
-func Start(ctx context.Context, c Consistency, i Isolation) (ActiveTxn, error) {
+func Start(ctx context.Context) (ActiveTxn, error) {
 	session, ok := ctx.Value(sessionKey{}).(Session)
 	if !ok {
 		return nil, errors.Fail("get session from context")
 	}
 
-	tx := session.Txn()
-	return tx, errors.WrapFail(tx.Start(ctx), "start txn")
+	tx, err := session.Txn().Start(ctx)
+	return tx, errors.WrapFail(err, "start txn")
+}
+
+func New(ctx context.Context) Txn {
+	session, ok := ctx.Value(sessionKey{}).(Session)
+	if !ok {
+		panic(errors.Fail("get session from context"))
+	}
+
+	return session.Txn()
 }

@@ -14,7 +14,7 @@ import (
 )
 
 func (m *mongoClient) NewSession() (txn.Session, error) {
-	s, err := m.c.StartSession(options.Session())
+	s, err := m.c.StartSession(options.Session().SetCausalConsistency(true))
 	if err != nil {
 		return nil, err
 	}
@@ -31,27 +31,11 @@ func (s *session) BindContext(ctx context.Context) context.Context {
 	return mongo.NewSessionContext(ctx, s.s)
 }
 
-func (s *session) TxnWithModel(c txn.Consistency, i txn.Isolation) txn.Txn {
-	if i > txn.ReadCommitted {
-		panic("unsupported isolation level")
-	}
-	if c > txn.CausalConsistency {
-		panic("unsupported consistency model")
-	}
-
-	w, r := writeconcern.Majority(), readconcern.Available()
-	if i == txn.ReadCommitted {
-		r = readconcern.Majority()
-	}
-
-	return &mongoTxn{
-		readCon:  r,
-		writeCon: w,
-	}
-}
-
 func (s *session) Txn() txn.Txn {
-	return s.TxnWithModel(txn.CausalConsistency, txn.ReadCommitted)
+	return &mongoTxn{
+		readCon:  readconcern.Majority(),
+		writeCon: writeconcern.Majority(),
+	}
 }
 
 func (s *session) Close(ctx context.Context) {
@@ -62,10 +46,40 @@ type mongoTxn struct {
 	readCon  *readconcern.ReadConcern
 	writeCon *writeconcern.WriteConcern
 	finished bool
+	err      error
 }
 
-func (m *mongoTxn) Start(ctx context.Context) error {
-	return mongo.SessionFromContext(ctx).
+func (m *mongoTxn) SetModel(model txn.ConsistencyModel) txn.Txn {
+	if m.err != nil {
+		return m
+	}
+
+	if model > txn.CausalConsistency {
+		m.err = errors.Error("unsupported consistency model")
+	}
+
+	return m
+}
+
+func (m *mongoTxn) SetIsolation(lvl txn.IsolationLevel) txn.Txn {
+	if m.err != nil {
+		return m
+	}
+
+	switch lvl {
+	case txn.ReadUncommitted:
+		m.readCon = readconcern.Available()
+	case txn.ReadCommitted:
+		m.readCon = readconcern.Majority()
+	default:
+		m.err = errors.Error("unsupported isolation level")
+	}
+
+	return m
+}
+
+func (m *mongoTxn) Start(ctx context.Context) (txn.ActiveTxn, error) {
+	return m, mongo.SessionFromContext(ctx).
 		StartTransaction(
 			options.Transaction().
 				SetReadConcern(m.readCon).
