@@ -45,7 +45,9 @@ func (u User) FindAndDeleteMeeting(meeting Meeting) ([]Meeting, bool) {
 		return u.Assigned, false
 	}
 
-	if u.Assigned[idx][1] != meeting[1] {
+	found := u.Assigned[idx]
+
+	if found[0] != meeting[0] || found[1] != meeting[1] {
 		return u.Assigned, false
 	}
 

@@ -366,7 +366,10 @@ func (b *Bot) tryAssign(
 		return false, true
 	}
 
-	tx, err := txn.Start(ctx)
+	tx, err := txn.New(ctx).
+		SetModel(txn.CausalConsistency).
+		SetIsolation(txn.SnapshotIsolation).
+		Start(ctx)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "start txn"))
 		return false, true

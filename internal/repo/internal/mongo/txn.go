@@ -71,6 +71,8 @@ func (m *mongoTxn) SetIsolation(lvl txn.IsolationLevel) txn.Txn {
 		m.readCon = readconcern.Available()
 	case txn.ReadCommitted:
 		m.readCon = readconcern.Majority()
+	case txn.SnapshotIsolation:
+		m.readCon = readconcern.Snapshot()
 	default:
 		m.err = errors.Error("unsupported isolation level")
 	}

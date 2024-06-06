@@ -943,10 +943,10 @@ func (mr *MockinterviewsApiMockRecorder) Find(ctx, id any) *gomock.Call {
 }
 
 // FindByUser mocks base method.
-func (m *MockinterviewsApi) FindByUser(ctx context.Context, username string) ([]models.Interview, error) {
+func (m *MockinterviewsApi) FindByUser(ctx context.Context, username string) ([]*models.Interview, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FindByUser", ctx, username)
-	ret0, _ := ret[0].([]models.Interview)
+	ret0, _ := ret[0].([]*models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -972,10 +972,10 @@ func (mr *MockinterviewsApiMockRecorder) FixTg(ctx, username, tg any) *gomock.Ca
 }
 
 // GetUpcoming mocks base method.
-func (m *MockinterviewsApi) GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) ([]models.Interview, error) {
+func (m *MockinterviewsApi) GetUpcoming(ctx context.Context, lastNotifyBefore, startsBefore int64) ([]*models.Interview, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUpcoming", ctx, lastNotifyBefore, startsBefore)
-	ret0, _ := ret[0].([]models.Interview)
+	ret0, _ := ret[0].([]*models.Interview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1097,18 +1097,18 @@ func (mr *MockusersApiMockRecorder) Update(ctx, username, telegramID, category, 
 }
 
 // UpdateMeetings mocks base method.
-func (m *MockusersApi) UpdateMeetings(ctx context.Context, username string, meets []models.Meeting) (bool, error) {
+func (m *MockusersApi) UpdateMeetings(ctx context.Context, username string, meets, old []models.Meeting) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateMeetings", ctx, username, meets)
+	ret := m.ctrl.Call(m, "UpdateMeetings", ctx, username, meets, old)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateMeetings indicates an expected call of UpdateMeetings.
-func (mr *MockusersApiMockRecorder) UpdateMeetings(ctx, username, meets any) *gomock.Call {
+func (mr *MockusersApiMockRecorder) UpdateMeetings(ctx, username, meets, old any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMeetings", reflect.TypeOf((*MockusersApi)(nil).UpdateMeetings), ctx, username, meets)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMeetings", reflect.TypeOf((*MockusersApi)(nil).UpdateMeetings), ctx, username, meets, old)
 }
 
 // Upsert mocks base method.

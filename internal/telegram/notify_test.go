@@ -19,7 +19,7 @@ func Test_getNeededNotifications(t *testing.T) {
 
 	type args struct {
 		now      int64
-		upcoming []models.Interview
+		upcoming []*models.Interview
 	}
 
 	type testcase struct {
@@ -40,7 +40,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now:      1000,
-				upcoming: []models.Interview{},
+				upcoming: []*models.Interview{},
 			},
 			want: []notification{},
 		},
@@ -52,13 +52,13 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{Meet: &[2]int64{1020, 1100}},
 				},
 			},
 			want: []notification{
 				{
-					Interview:  models.Interview{Meet: &[2]int64{1020, 1100}},
+					Interview:  &models.Interview{Meet: &[2]int64{1020, 1100}},
 					Recipients: both,
 					NotifyTime: 920,
 					LeftTime:   100 * time.Millisecond,
@@ -73,7 +73,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{Meet: &[2]int64{1110, 1200}},
 				},
 			},
@@ -87,7 +87,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{
 						Meet: &[2]int64{1050, 1100},
 						LastNotification: &models.NotificationLog{
@@ -107,7 +107,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{
 						Meet: &[2]int64{1002, 1010},
 						LastNotification: &models.NotificationLog{
@@ -127,7 +127,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{
 						Meet: &[2]int64{1004, 1100},
 						LastNotification: &models.NotificationLog{
@@ -139,7 +139,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			want: []notification{
 				{
-					Interview: models.Interview{
+					Interview: &models.Interview{
 						Meet: &[2]int64{1004, 1100},
 						LastNotification: &models.NotificationLog{
 							UnixTime: 900,
@@ -160,7 +160,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{
 						Meet: &[2]int64{1100, 1200},
 						LastNotification: &models.NotificationLog{
@@ -172,7 +172,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			want: []notification{
 				{
-					Interview: models.Interview{
+					Interview: &models.Interview{
 						Meet: &[2]int64{1100, 1200},
 						LastNotification: &models.NotificationLog{
 							UnixTime: 900,
@@ -193,7 +193,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			args: args{
 				now: 1000,
-				upcoming: []models.Interview{
+				upcoming: []*models.Interview{
 					{
 						Meet: &[2]int64{1050, 1100},
 						LastNotification: &models.NotificationLog{
@@ -205,7 +205,7 @@ func Test_getNeededNotifications(t *testing.T) {
 			},
 			want: []notification{
 				{
-					Interview: models.Interview{
+					Interview: &models.Interview{
 						Meet: &[2]int64{1050, 1100},
 						LastNotification: &models.NotificationLog{
 							UnixTime: 950,

@@ -55,7 +55,7 @@ func (b *Bot) watch() {
 }
 
 type notification struct {
-	Interview  models.Interview
+	Interview  *models.Interview
 	Recipients []models.Role
 	NotifyTime int64
 	LeftTime   time.Duration
@@ -125,7 +125,10 @@ func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notificatio
 		)
 	}
 
-	tx, err := txn.Start(ctx)
+	tx, err := txn.New(ctx).
+		SetModel(txn.CausalConsistency).
+		SetIsolation(txn.SnapshotIsolation).
+		Start(ctx)
 	if err != nil {
 		b.log.Error(errors.WrapFail(err, "start txn"))
 		return false
@@ -158,7 +161,7 @@ func (b *Bot) sendOneNotification(ctx context.Context, tgID int64, n notificatio
 	return true
 }
 
-func (b *Bot) getNeededNotifications(now int64, upcoming []models.Interview) []notification {
+func (b *Bot) getNeededNotifications(now int64, upcoming []*models.Interview) []notification {
 	needed := make([]notification, 0, len(upcoming))
 
 	both := []models.Role{models.RoleInterviewer, models.RoleCandidate}

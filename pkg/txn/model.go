@@ -47,6 +47,6 @@ type IsolationLevel int
 const (
 	ReadUncommitted IsolationLevel = iota
 	ReadCommitted
-	RepeatableRead
+	SnapshotIsolation
 	Serializable
 )

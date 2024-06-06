@@ -18,7 +18,7 @@ func TestBot_showInterviews(t *testing.T) {
 	type mocks struct {
 		sender *telebot.User
 
-		interviews []models.Interview
+		interviews []*models.Interview
 		iErr       error
 
 		c telebot.Context
@@ -60,7 +60,7 @@ func TestBot_showInterviews(t *testing.T) {
 			name: "have assigned interviews",
 			mock: mocks{
 				sender: &telebot.User{ID: 42},
-				interviews: []models.Interview{
+				interviews: []*models.Interview{
 					{Meet: &[2]int64{10, 20}},
 					{},
 					{Meet: &[2]int64{20, 30}},

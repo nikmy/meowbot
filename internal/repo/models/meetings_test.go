@@ -144,9 +144,9 @@ func TestUser_FindAndDeleteMeeting(t *testing.T) {
 		},
 		{
 			name:     "mismatched start",
-			assigned: []Meeting{{1, 2}, {3, 5}, {5, 6}},
-			arg:      Meeting{4, 5},
-			want:     []Meeting{{1, 2}, {3, 5}, {5, 6}},
+			assigned: []Meeting{{1, 2}, {3, 5}, {6, 7}},
+			arg:      Meeting{4, 7},
+			want:     []Meeting{{1, 2}, {3, 5}, {6, 7}},
 			wantOk:   false,
 		},
 		{
