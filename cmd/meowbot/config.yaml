@@ -1,0 +1,22 @@
+Environment: dev
+Telegram:
+  bot:
+    token: 7194611685:AAHSZKXXYoiG1pZ0EaVpRHKQVO1E3ectByU
+    pollInterval: 5s
+  notifications:
+    notifyBefore: [10m, 5m, 1m]
+    notifyPeriod: 5s
+  timeZone:
+    name: "msk"
+    utcDiff: 3h
+Database:
+  mongo:
+    url: 'mongodb://mongo:27017'
+    auth:
+      username: 'admin'
+      password: 'admin'
+    timeout: 5s
+    database: 'interviews'
+  sources:
+    interviews: 'interviews'
+    users: 'users'

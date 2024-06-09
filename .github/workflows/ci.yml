@@ -1,0 +1,20 @@
+name: PR AutoChecks
+
+on:
+  pull_request:
+    branches: [ "main", "dev" ]
+  workflow_dispatch:
+
+jobs:
+  go_unit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.22.1'
+      - name: telegram unit tests
+        run: go test github.com/nikmy/meowbot/internal/telegram -race -coverprofile="auto_out.cov"
+      - name: models unit tests
+        run: go test github.com/nikmy/meowbot/internal/repo/models -race -coverprofile="auto_out.cov"
