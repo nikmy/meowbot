@@ -3,8 +3,10 @@ module github.com/nikmy/meowbot
 go 1.22.1
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.0
+	github.com/chenmingyong0423/go-mongox v0.18.1
+	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/stretchr/testify v1.9.0
+	github.com/valyala/fasthttp v1.51.0
 	github.com/vitaliy-ukiru/fsm-telebot v1.3.3
 	go.mongodb.org/mongo-driver v1.15.0
 	go.uber.org/mock v0.4.0
@@ -15,7 +17,6 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
-	github.com/chenmingyong0423/go-mongox v0.18.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -32,7 +33,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
